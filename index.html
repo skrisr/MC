@@ -154,76 +154,17 @@
         {
             "imports": {
                 "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "simplex-noise": "https://cdn.jsdelivr.net/npm/simplex-noise@4.0.1/+esm",
+                "alea": "https://cdn.jsdelivr.net/npm/alea@1.0.1/+esm"
             }
         }
     </script>
     <script type="module">
         import * as THREE from 'three';
         import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-
-        class SimplexNoise {
-            constructor(seed = 1337) {
-                this.p = new Uint8Array(256);
-                for (let i = 0; i < 256; i++) this.p[i] = i;
-                let s = seed;
-                const rand = () => {
-                    s = (s * 16807) % 2147483647;
-                    return (s - 1) / 2147483646;
-                };
-                for (let i = 255; i > 0; i--) {
-                    const j = Math.floor(rand() * (i + 1));
-                    [this.p[i], this.p[j]] = [this.p[j], this.p[i]];
-                }
-                this.perm = new Uint8Array(512);
-                for (let i = 0; i < 512; i++) this.perm[i] = this.p[i & 255];
-            }
-
-            grad(hash, x, y) {
-                const h = hash & 7;
-                const u = h < 4 ? x : y;
-                const v = h < 4 ? y : x;
-                return ((h & 1) ? -u : u) + ((h & 2) ? -2 * v : 2 * v);
-            }
-
-            noise2D(x, y) {
-                const F2 = 0.3660254037844386;
-                const G2 = 0.21132486540518713;
-                const s = (x + y) * F2;
-                const i = Math.floor(x + s);
-                const j = Math.floor(y + s);
-                const t = (i + j) * G2;
-                const X0 = i - t;
-                const Y0 = j - t;
-                const x0 = x - X0;
-                const y0 = y - Y0;
-                const i1 = x0 > y0 ? 1 : 0;
-                const j1 = x0 > y0 ? 0 : 1;
-                const x1 = x0 - i1 + G2;
-                const y1 = y0 - j1 + G2;
-                const x2 = x0 - 1 + 2 * G2;
-                const y2 = y0 - 1 + 2 * G2;
-                const ii = i & 255;
-                const jj = j & 255;
-                let n0 = 0, n1 = 0, n2 = 0;
-                let t0 = 0.5 - x0 * x0 - y0 * y0;
-                if (t0 >= 0) {
-                    t0 *= t0;
-                    n0 = t0 * t0 * this.grad(this.perm[ii + this.perm[jj]], x0, y0);
-                }
-                let t1 = 0.5 - x1 * x1 - y1 * y1;
-                if (t1 >= 0) {
-                    t1 *= t1;
-                    n1 = t1 * t1 * this.grad(this.perm[ii + i1 + this.perm[jj + j1]], x1, y1);
-                }
-                let t2 = 0.5 - x2 * x2 - y2 * y2;
-                if (t2 >= 0) {
-                    t2 *= t2;
-                    n2 = t2 * t2 * this.grad(this.perm[ii + 1 + this.perm[jj + 1]], x2, y2);
-                }
-                return 70 * (n0 + n1 + n2);
-            }
-        }
+        import { createNoise2D, createNoise3D } from 'simplex-noise';
+        import alea from 'alea';
 
         const BlockType = {
             AIR: 0,
@@ -231,7 +172,10 @@
             DIRT: 2,
             STONE: 3,
             SAND: 4,
-            SNOW: 5
+            SNOW: 5,
+            WATER: 6,
+            WOOD: 7,
+            LEAVES: 8
         };
 
         const BLOCK_COLORS = {
@@ -239,16 +183,32 @@
             [BlockType.DIRT]: 0x8b5a2b,
             [BlockType.STONE]: 0x888888,
             [BlockType.SAND]: 0xdccb8f,
-            [BlockType.SNOW]: 0xf5f5f5
+            [BlockType.SNOW]: 0xf5f5f5,
+            [BlockType.WATER]: 0x3a6fd8,
+            [BlockType.WOOD]: 0x6b4226,
+            [BlockType.LEAVES]: 0x2e7d32
         };
 
+        const TRANSPARENT_TYPES = new Set([BlockType.WATER, BlockType.LEAVES]);
+        const SEA_LEVEL = 12;
+
         class World {
-            constructor() {
+            constructor(seed = 'voxel-world') {
+                this.seed = seed;
                 this.chunkSize = 16;
                 this.chunkHeight = 48;
                 this.chunks = new Map();
-                this.noise = new SimplexNoise(42);
                 this.dirty = new Set();
+
+                this.continentNoise = createNoise2D(alea(seed + '-continent'));
+                this.hillNoise = createNoise2D(alea(seed + '-hills'));
+                this.detailNoise = createNoise2D(alea(seed + '-detail'));
+                this.riverNoise = createNoise2D(alea(seed + '-river'));
+                this.moistureNoise = createNoise2D(alea(seed + '-moisture'));
+                this.treeNoise = createNoise2D(alea(seed + '-tree'));
+                this.caveNoise = createNoise3D(alea(seed + '-cave'));
+
+                this.treeRandom = alea(seed + '-tree-rand');
             }
 
             chunkKey(cx, cz) {
@@ -259,13 +219,65 @@
                 return [Math.floor(x / this.chunkSize), Math.floor(z / this.chunkSize)];
             }
 
+            fbm(noiseFn, x, z, octaves, baseScale, lacunarity, gain) {
+                let amplitude = 1;
+                let frequency = baseScale;
+                let sum = 0;
+                let norm = 0;
+                for (let i = 0; i < octaves; i++) {
+                    sum += noiseFn(x * frequency, z * frequency) * amplitude;
+                    norm += amplitude;
+                    amplitude *= gain;
+                    frequency *= lacunarity;
+                }
+                return sum / norm;
+            }
+
+            getBaseHeight(wx, wz) {
+                const continent = this.fbm(this.continentNoise, wx, wz, 3, 0.006, 2.1, 0.5);
+                const hills = this.fbm(this.hillNoise, wx, wz, 4, 0.02, 2.0, 0.5);
+                const detail = this.fbm(this.detailNoise, wx, wz, 2, 0.09, 2.0, 0.5);
+
+                const continentNorm = (continent + 1) * 0.5;
+                const hillsNorm = (hills + 1) * 0.5;
+                const detailNorm = (detail + 1) * 0.5;
+
+                let elevation = continentNorm * 0.55 + hillsNorm * 0.35 + detailNorm * 0.1;
+                elevation = Math.pow(elevation, 1.3);
+
+                return Math.floor(6 + elevation * 26);
+            }
+
+            getRiverFactor(wx, wz) {
+                const r = this.riverNoise(wx * 0.008, wz * 0.008);
+                return Math.abs(r);
+            }
+
             getHeight(wx, wz) {
-                const scale = 0.04;
-                let e = this.noise.noise2D(wx * scale, wz * scale) * 0.6;
-                e += this.noise.noise2D(wx * scale * 2, wz * scale * 2) * 0.3;
-                e += this.noise.noise2D(wx * scale * 4, wz * scale * 4) * 0.1;
-                const normalized = (e + 1) * 0.5;
-                return Math.floor(8 + normalized * 20);
+                let height = this.getBaseHeight(wx, wz);
+                const riverFactor = this.getRiverFactor(wx, wz);
+
+                if (riverFactor < 0.035) {
+                    const carve = (0.035 - riverFactor) / 0.035;
+                    height -= Math.floor(carve * 6);
+                }
+
+                return height;
+            }
+
+            getMoisture(wx, wz) {
+                return (this.fbm(this.moistureNoise, wx, wz, 2, 0.01, 2.0, 0.5) + 1) * 0.5;
+            }
+
+            isCave(wx, wy, wz) {
+                if (wy < 2) return false;
+                const n = this.caveNoise(wx * 0.08, wy * 0.08, wz * 0.08);
+                return n > 0.62;
+            }
+
+            hashRandom(wx, wz) {
+                const s = Math.sin(wx * 127.1 + wz * 311.7 + this.seed.length * 43.7) * 43758.5453;
+                return s - Math.floor(s);
             }
 
             ensureChunk(cx, cz) {
@@ -273,7 +285,7 @@
                 if (this.chunks.has(key)) return this.chunks.get(key);
 
                 const data = new Uint8Array(this.chunkSize * this.chunkHeight * this.chunkSize);
-                const chunk = { cx, cz, data };
+                const chunk = { cx, cz, data, heightMap: new Int16Array(this.chunkSize * this.chunkSize) };
                 this.chunks.set(key, chunk);
 
                 for (let lx = 0; lx < this.chunkSize; lx++) {
@@ -281,22 +293,91 @@
                         const wx = cx * this.chunkSize + lx;
                         const wz = cz * this.chunkSize + lz;
                         const height = this.getHeight(wx, wz);
+                        const riverFactor = this.getRiverFactor(wx, wz);
+                        const isRiverBed = riverFactor < 0.035;
+                        const moisture = this.getMoisture(wx, wz);
+                        chunk.heightMap[lx * this.chunkSize + lz] = height;
+
                         for (let y = 0; y < this.chunkHeight; y++) {
                             let type = BlockType.AIR;
+
                             if (y < height - 4) {
                                 type = BlockType.STONE;
                             } else if (y < height - 1) {
                                 type = BlockType.DIRT;
                             } else if (y === height - 1) {
-                                if (height <= 10) type = BlockType.SAND;
-                                else if (height >= 24) type = BlockType.SNOW;
-                                else type = BlockType.GRASS;
+                                if (isRiverBed) type = BlockType.SAND;
+                                else if (height <= SEA_LEVEL) type = BlockType.SAND;
+                                else if (height >= 30) type = BlockType.SNOW;
+                                else type = moisture < 0.3 ? BlockType.SAND : BlockType.GRASS;
                             }
+
+                            if (type !== BlockType.AIR && this.isCave(wx, y, wz) && y < height - 2) {
+                                type = BlockType.AIR;
+                            }
+
+                            if (type === BlockType.AIR && y <= SEA_LEVEL && y >= height) {
+                                type = BlockType.WATER;
+                            }
+
                             this.setLocal(chunk, lx, y, lz, type, false);
                         }
                     }
                 }
+
+                this.populateTrees(chunk);
+
                 return chunk;
+            }
+
+            populateTrees(chunk) {
+                const size = this.chunkSize;
+                for (let lx = 2; lx < size - 2; lx++) {
+                    for (let lz = 2; lz < size - 2; lz++) {
+                        const wx = chunk.cx * size + lx;
+                        const wz = chunk.cz * size + lz;
+                        const height = chunk.heightMap[lx * size + lz];
+
+                        if (height <= SEA_LEVEL || height >= 30) continue;
+
+                        const surfaceType = chunk.data[this.index(lx, height - 1, lz)];
+                        if (surfaceType !== BlockType.GRASS) continue;
+
+                        const density = (this.treeNoise(wx * 0.15, wz * 0.15) + 1) * 0.5;
+                        const spawnChance = density > 0.68 ? 0.14 : 0.01;
+                        if (this.hashRandom(wx, wz) > spawnChance) continue;
+
+                        this.placeTree(chunk, lx, height, lz);
+                    }
+                }
+            }
+
+            placeTree(chunk, lx, baseY, lz) {
+                const size = this.chunkSize;
+                const trunkHeight = 4 + Math.floor(this.hashRandom(lx * 7 + baseY, lz * 13) * 3);
+
+                for (let i = 0; i < trunkHeight; i++) {
+                    this.setLocal(chunk, lx, baseY + i, lz, BlockType.WOOD, false);
+                }
+
+                const topY = baseY + trunkHeight;
+                for (let dx = -2; dx <= 2; dx++) {
+                    for (let dz = -2; dz <= 2; dz++) {
+                        for (let dy = -2; dy <= 1; dy++) {
+                            const dist = Math.abs(dx) + Math.abs(dz) + Math.abs(dy);
+                            if (dist > 3) continue;
+                            const nx = lx + dx;
+                            const nz = lz + dz;
+                            const ny = topY + dy;
+                            if (nx < 0 || nx >= size || nz < 0 || nz >= size) continue;
+                            if (ny < 0 || ny >= this.chunkHeight) continue;
+                            const existing = chunk.data[this.index(nx, ny, nz)];
+                            if (existing === BlockType.WOOD) continue;
+                            if (dx === 0 && dz === 0 && dy <= 0) continue;
+                            this.setLocal(chunk, nx, ny, nz, BlockType.LEAVES, false);
+                        }
+                    }
+                }
             }
 
             index(lx, y, lz) {
@@ -335,7 +416,13 @@
             }
 
             isSolid(wx, wy, wz) {
-                return this.getBlock(wx, wy, wz) !== BlockType.AIR;
+                const type = this.getBlock(wx, wy, wz);
+                return type !== BlockType.AIR && type !== BlockType.WATER;
+            }
+
+            isDiggable(wx, wy, wz) {
+                const type = this.getBlock(wx, wy, wz);
+                return type !== BlockType.AIR && type !== BlockType.WATER;
             }
         }
 
@@ -347,7 +434,23 @@
 
                 this.materials = {};
                 for (const type in BLOCK_COLORS) {
-                    this.materials[type] = new THREE.MeshLambertMaterial({ color: BLOCK_COLORS[type] });
+                    const t = Number(type);
+                    if (t === BlockType.WATER) {
+                        this.materials[type] = new THREE.MeshLambertMaterial({
+                            color: BLOCK_COLORS[type],
+                            transparent: true,
+                            opacity: 0.65,
+                            depthWrite: false
+                        });
+                    } else if (t === BlockType.LEAVES) {
+                        this.materials[type] = new THREE.MeshLambertMaterial({
+                            color: BLOCK_COLORS[type],
+                            transparent: true,
+                            opacity: 0.9
+                        });
+                    } else {
+                        this.materials[type] = new THREE.MeshLambertMaterial({ color: BLOCK_COLORS[type] });
+                    }
                 }
             }
 
@@ -391,7 +494,14 @@
                                 const nx = wx + face.dir[0];
                                 const ny = y + face.dir[1];
                                 const nz = wz + face.dir[2];
-                                if (this.world.isSolid(nx, ny, nz)) continue;
+                                const neighborType = this.world.getBlock(nx, ny, nz);
+
+                                if (neighborType !== BlockType.AIR) {
+                                    const sameTransparent = TRANSPARENT_TYPES.has(type) && neighborType === type;
+                                    const neighborOpaque = !TRANSPARENT_TYPES.has(neighborType);
+                                    if (sameTransparent) continue;
+                                    if (neighborOpaque) continue;
+                                }
 
                                 if (!facesByType[type]) facesByType[type] = { positions: [], normals: [], indices: [] };
                                 const group = facesByType[type];
@@ -540,7 +650,8 @@
 
             spawnAt(x, z) {
                 let y = this.world.chunkHeight - 1;
-                while (y > 0 && !this.world.isSolid(x, y, z)) y--;
+                while (y > 0 && this.world.getBlock(x, y, z) === BlockType.AIR) y--;
+                while (y > 0 && this.world.getBlock(x, y, z) === BlockType.WATER) y--;
                 this.camera.position.set(x, y + 1 + this.eyeHeight, z);
             }
         }
@@ -548,7 +659,8 @@
         class Engine {
             constructor() {
                 this.isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-                this.world = new World();
+                this.seed = this.resolveSeed();
+                this.world = new World(this.seed);
                 this.viewDistance = 3;
                 this.active = false;
 
@@ -556,6 +668,7 @@
                 this.initRenderer();
                 this.initControls();
                 this.initLighting();
+                this.showSeedLabel();
 
                 this.mesher = new ChunkMesher(this.scene, this.world);
                 this.player = new Player(this.camera, this.world);
@@ -565,6 +678,7 @@
 
                 this.raycaster = new THREE.Raycaster();
                 this.raycaster.far = 8;
+                this.heldBlock = BlockType.STONE;
                 this.initInteraction();
 
                 if (this.isTouch) this.initTouchControls();
@@ -572,6 +686,27 @@
                 window.addEventListener('resize', this.onWindowResize.bind(this));
                 this.animate = this.animate.bind(this);
                 this.clock = new THREE.Clock();
+            }
+
+            resolveSeed() {
+                const params = new URLSearchParams(window.location.search);
+                const fromUrl = params.get('seed');
+                if (fromUrl) return fromUrl;
+                return 'seed-' + Math.floor(Math.random() * 1e9);
+            }
+
+            showSeedLabel() {
+                const label = document.createElement('div');
+                label.textContent = `Seed: ${this.seed}`;
+                label.style.position = 'absolute';
+                label.style.top = '12px';
+                label.style.left = '12px';
+                label.style.color = 'white';
+                label.style.fontFamily = 'sans-serif';
+                label.style.fontSize = '13px';
+                label.style.textShadow = '1px 1px 3px rgba(0,0,0,0.8)';
+                label.style.pointerEvents = 'none';
+                document.body.appendChild(label);
             }
 
             loadInitialChunks() {
@@ -840,6 +975,9 @@
                 const result = this.castBlockRay();
                 if (!result) return;
                 const [x, y, z] = result.hit;
+                const broken = this.world.getBlock(x, y, z);
+                if (broken === BlockType.AIR) return;
+                this.heldBlock = broken;
                 this.world.setBlock(x, y, z, BlockType.AIR);
                 this.mesher.rebuildDirty();
             }
@@ -849,7 +987,13 @@
                 if (!result) return;
                 const [x, y, z] = result.place;
                 if (this.world.isSolid(x, y, z)) return;
-                this.world.setBlock(x, y, z, BlockType.STONE);
+
+                const px = Math.floor(this.camera.position.x);
+                const py = Math.floor(this.camera.position.y - this.player.eyeHeight);
+                const pz = Math.floor(this.camera.position.z);
+                if (x === px && z === pz && (y === py || y === py + 1)) return;
+
+                this.world.setBlock(x, y, z, this.heldBlock || BlockType.STONE);
                 this.mesher.rebuildDirty();
             }
 
