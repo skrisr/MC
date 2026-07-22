@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Voxel Engine</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
         body {
             margin: 0;
             overflow: hidden;
@@ -14,18 +17,6 @@
             display: block;
             width: 100vw;
             height: 100vh;
-        }
-        #ui {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            font-family: sans-serif;
-            font-size: 24px;
-            pointer-events: none;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-            text-align: center;
         }
         #crosshair {
             position: absolute;
@@ -38,6 +29,7 @@
             background: rgba(255,255,255,0.8);
             pointer-events: none;
             display: none;
+            z-index: 5;
         }
         #hint {
             position: absolute;
@@ -50,6 +42,36 @@
             text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
             pointer-events: none;
             display: none;
+            z-index: 5;
+        }
+        #seedLabel {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            color: white;
+            font-family: sans-serif;
+            font-size: 13px;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+            pointer-events: none;
+            display: none;
+            z-index: 5;
+        }
+        #gearBtn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.45);
+            border: 1px solid rgba(255,255,255,0.4);
+            color: white;
+            font-size: 18px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+            cursor: pointer;
         }
         #touchLayer {
             position: absolute;
@@ -58,6 +80,7 @@
             touch-action: none;
             user-select: none;
             -webkit-user-select: none;
+            z-index: 5;
         }
         #lookZone {
             position: absolute;
@@ -65,7 +88,6 @@
             top: 0;
             width: 60%;
             height: 100%;
-            z-index: 1;
         }
         #joystickZone {
             position: absolute;
@@ -76,7 +98,6 @@
             border-radius: 50%;
             background: rgba(255,255,255,0.12);
             border: 2px solid rgba(255,255,255,0.35);
-            z-index: 2;
         }
         #joystickStick {
             position: absolute;
@@ -101,7 +122,6 @@
             font-size: 13px;
             text-align: center;
             line-height: 1.2;
-            z-index: 2;
         }
         #jumpBtn {
             right: 28px;
@@ -121,34 +141,187 @@
             width: 64px;
             height: 64px;
         }
-        #startBtn {
+
+        #overlay {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            padding: 16px 32px;
-            font-size: 20px;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(180deg, #1b2735, #090a0f);
+            z-index: 100;
             font-family: sans-serif;
-            border-radius: 8px;
-            border: none;
-            background: #4caf50;
             color: white;
+        }
+        #overlay.hidden {
+            display: none;
+        }
+        #panel {
+            width: min(420px, 92vw);
+            max-height: 88vh;
+            overflow-y: auto;
+            background: rgba(20, 22, 28, 0.92);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 14px;
+            padding: 24px;
+        }
+        #panel h1 {
+            margin: 0 0 4px;
+            font-size: 22px;
+        }
+        #panel .subtitle {
+            margin: 0 0 20px;
+            font-size: 13px;
+            color: rgba(255,255,255,0.6);
+        }
+        .field {
+            margin-bottom: 18px;
+        }
+        .field label {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 6px;
+            color: rgba(255,255,255,0.85);
+        }
+        .field .row {
+            display: flex;
+            gap: 8px;
+        }
+        .field input[type="text"] {
+            flex: 1;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.06);
+            color: white;
+            font-size: 14px;
+        }
+        .field input[type="text"]:focus {
+            outline: 2px solid #4caf50;
+        }
+        .btn {
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.08);
+            color: white;
+            font-size: 13px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .btn:hover {
+            background: rgba(255,255,255,0.16);
+        }
+        .btn.primary {
+            background: #4caf50;
+            border-color: #4caf50;
+            font-weight: 600;
+        }
+        .btn.primary:hover {
+            background: #43a047;
+        }
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .slider-row input[type="range"] {
+            flex: 1;
+        }
+        .slider-row .value {
+            width: 42px;
+            text-align: right;
+            font-size: 12px;
+            color: rgba(255,255,255,0.7);
+        }
+        #startBtn {
+            width: 100%;
+            margin-top: 8px;
+            padding: 14px;
+            font-size: 16px;
+        }
+        #startHint {
+            margin-top: 10px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            text-align: center;
+        }
+        .section-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: rgba(255,255,255,0.45);
+            margin: 20px 0 12px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 16px;
+        }
+        .section-title:first-of-type {
+            border-top: none;
+            margin-top: 0;
+            padding-top: 0;
         }
     </style>
 </head>
 <body>
-    <div id="ui">
-        <div id="desktopStart">Click to Lock Pointer</div>
-        <button id="startBtn" style="display:none;">Tap to Start</button>
-    </div>
     <div id="crosshair"></div>
-    <div id="hint">WASD move · Space jump · Left click break · Right click place</div>
+    <div id="hint"></div>
+    <div id="seedLabel"></div>
+    <div id="gearBtn">⚙</div>
     <div id="touchLayer">
         <div id="lookZone"></div>
         <div id="joystickZone"><div id="joystickStick"></div></div>
         <div id="jumpBtn" class="touch-btn">Jump</div>
         <div id="breakBtn" class="touch-btn">Break</div>
         <div id="placeBtn" class="touch-btn">Place</div>
+    </div>
+
+    <div id="overlay">
+        <div id="panel">
+            <h1>Voxel Engine</h1>
+            <p class="subtitle">世界の設定をしてから開始してください</p>
+
+            <div class="section-title">ワールド</div>
+            <div class="field">
+                <label for="seedInput">Seed（空欄でランダム）</label>
+                <div class="row">
+                    <input type="text" id="seedInput" placeholder="例: mountain-1">
+                    <button class="btn" id="randomSeedBtn">ランダム</button>
+                </div>
+            </div>
+            <div class="field">
+                <label>視野距離（チャンク数）</label>
+                <div class="slider-row">
+                    <input type="range" id="viewDistanceInput" min="1" max="6" step="1" value="3">
+                    <span class="value" id="viewDistanceValue">3</span>
+                </div>
+            </div>
+
+            <div class="section-title">操作</div>
+            <div class="field">
+                <label>視点感度</label>
+                <div class="slider-row">
+                    <input type="range" id="sensitivityInput" min="0.2" max="3" step="0.1" value="1">
+                    <span class="value" id="sensitivityValue">1.0</span>
+                </div>
+            </div>
+            <div class="field">
+                <label>移動速度</label>
+                <div class="slider-row">
+                    <input type="range" id="speedInput" min="3" max="12" step="0.5" value="6">
+                    <span class="value" id="speedValue">6.0</span>
+                </div>
+            </div>
+            <div class="field">
+                <label>ジャンプ力</label>
+                <div class="slider-row">
+                    <input type="range" id="jumpInput" min="4" max="14" step="0.5" value="8">
+                    <span class="value" id="jumpValue">8.0</span>
+                </div>
+            </div>
+
+            <button class="btn primary" id="startBtn">タップ / クリックしてスタート</button>
+            <p id="startHint">開始後は歯車アイコンからいつでも設定を変更できます</p>
+        </div>
     </div>
     <script type="importmap">
         {
@@ -162,7 +335,6 @@
     </script>
     <script type="module">
         import * as THREE from 'three';
-        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
         import { createNoise2D, createNoise3D } from 'simplex-noise';
         import alea from 'alea';
 
@@ -571,6 +743,14 @@
                 this.virtualJump = false;
             }
 
+            setSpeed(speed) {
+                this.speed = speed;
+            }
+
+            setJumpSpeed(jumpSpeed) {
+                this.jumpSpeed = jumpSpeed;
+            }
+
             checkCollision(x, y, z) {
                 const minX = x - this.width / 2;
                 const maxX = x + this.width / 2;
@@ -659,68 +839,26 @@
         class Engine {
             constructor() {
                 this.isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-                this.seed = this.resolveSeed();
-                this.world = new World(this.seed);
-                this.viewDistance = 3;
                 this.active = false;
+                this.settingsOpen = true;
+
+                this.mouseSensitivity = 1.0;
+                this.touchSensitivity = 1.0;
 
                 this.initScene();
                 this.initRenderer();
-                this.initControls();
                 this.initLighting();
-                this.showSeedLabel();
-
-                this.mesher = new ChunkMesher(this.scene, this.world);
-                this.player = new Player(this.camera, this.world);
-
-                this.loadInitialChunks();
-                this.player.spawnAt(8, 8);
-
-                this.raycaster = new THREE.Raycaster();
-                this.raycaster.far = 8;
-                this.heldBlock = BlockType.STONE;
+                this.initOverlay();
+                this.initPointerLockControls();
                 this.initInteraction();
-
-                if (this.isTouch) this.initTouchControls();
 
                 window.addEventListener('resize', this.onWindowResize.bind(this));
                 this.animate = this.animate.bind(this);
                 this.clock = new THREE.Clock();
             }
 
-            resolveSeed() {
-                const params = new URLSearchParams(window.location.search);
-                const fromUrl = params.get('seed');
-                if (fromUrl) return fromUrl;
+            randomSeed() {
                 return 'seed-' + Math.floor(Math.random() * 1e9);
-            }
-
-            showSeedLabel() {
-                const label = document.createElement('div');
-                label.textContent = `Seed: ${this.seed}`;
-                label.style.position = 'absolute';
-                label.style.top = '12px';
-                label.style.left = '12px';
-                label.style.color = 'white';
-                label.style.fontFamily = 'sans-serif';
-                label.style.fontSize = '13px';
-                label.style.textShadow = '1px 1px 3px rgba(0,0,0,0.8)';
-                label.style.pointerEvents = 'none';
-                document.body.appendChild(label);
-            }
-
-            loadInitialChunks() {
-                for (let cx = -this.viewDistance; cx <= this.viewDistance; cx++) {
-                    for (let cz = -this.viewDistance; cz <= this.viewDistance; cz++) {
-                        this.world.ensureChunk(cx, cz);
-                    }
-                }
-                for (let cx = -this.viewDistance; cx <= this.viewDistance; cx++) {
-                    for (let cz = -this.viewDistance; cz <= this.viewDistance; cz++) {
-                        this.mesher.buildChunkMesh(cx, cz);
-                    }
-                }
-                this.world.dirty.clear();
             }
 
             initScene() {
@@ -741,65 +879,6 @@
                 document.body.appendChild(this.renderer.domElement);
             }
 
-            initControls() {
-                const ui = document.getElementById('ui');
-                const crosshair = document.getElementById('crosshair');
-                const hint = document.getElementById('hint');
-                const touchLayer = document.getElementById('touchLayer');
-                const desktopStart = document.getElementById('desktopStart');
-                const startBtn = document.getElementById('startBtn');
-
-                if (this.isTouch) {
-                    desktopStart.style.display = 'none';
-                    startBtn.style.display = 'block';
-
-                    this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
-                    this.euler.setFromQuaternion(this.camera.quaternion);
-
-                    const activate = () => {
-                        this.active = true;
-                        ui.style.display = 'none';
-                        crosshair.style.display = 'block';
-                        hint.style.display = 'block';
-                        touchLayer.style.display = 'block';
-                    };
-                    startBtn.addEventListener('touchstart', (e) => {
-                        e.preventDefault();
-                        activate();
-                    });
-                    startBtn.addEventListener('click', activate);
-
-                    this.controls = {
-                        isLocked: false,
-                        getDirection: (target) => {
-                            target.set(0, 0, -1).applyEuler(this.euler);
-                            return target;
-                        }
-                    };
-                    Object.defineProperty(this.controls, 'isLocked', {
-                        get: () => this.active
-                    });
-                } else {
-                    this.controls = new PointerLockControls(this.camera, document.body);
-
-                    document.addEventListener('click', () => {
-                        this.controls.lock();
-                    });
-
-                    this.controls.addEventListener('lock', () => {
-                        ui.style.display = 'none';
-                        crosshair.style.display = 'block';
-                        hint.style.display = 'block';
-                    });
-
-                    this.controls.addEventListener('unlock', () => {
-                        ui.style.display = 'block';
-                        crosshair.style.display = 'none';
-                        hint.style.display = 'none';
-                    });
-                }
-            }
-
             initLighting() {
                 const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
                 directionalLight.position.set(10, 20, 10);
@@ -809,14 +888,216 @@
                 this.scene.add(ambientLight);
             }
 
+            initPointerLockControls() {
+                this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+                if (!this.isTouch) {
+                    document.addEventListener('pointerlockchange', () => {
+                        const locked = document.pointerLockElement === document.body;
+                        if (!locked && this.active && !this.settingsOpen) {
+                            this.openSettings(true);
+                        }
+                    });
+                    document.addEventListener('pointerlockerror', () => {
+                        this.active = false;
+                    });
+                }
+
+                this.controls = {
+                    getDirection: (target) => {
+                        target.set(0, 0, -1).applyEuler(this.euler);
+                        return target;
+                    }
+                };
+                Object.defineProperty(this.controls, 'isLocked', {
+                    get: () => this.active
+                });
+            }
+
+            initOverlay() {
+                this.overlay = document.getElementById('overlay');
+                this.seedInput = document.getElementById('seedInput');
+                this.randomSeedBtn = document.getElementById('randomSeedBtn');
+                this.viewDistanceInput = document.getElementById('viewDistanceInput');
+                this.viewDistanceValue = document.getElementById('viewDistanceValue');
+                this.sensitivityInput = document.getElementById('sensitivityInput');
+                this.sensitivityValue = document.getElementById('sensitivityValue');
+                this.speedInput = document.getElementById('speedInput');
+                this.speedValue = document.getElementById('speedValue');
+                this.jumpInput = document.getElementById('jumpInput');
+                this.jumpValue = document.getElementById('jumpValue');
+                this.startBtn = document.getElementById('startBtn');
+                this.gearBtn = document.getElementById('gearBtn');
+                this.crosshair = document.getElementById('crosshair');
+                this.hint = document.getElementById('hint');
+                this.seedLabel = document.getElementById('seedLabel');
+                this.touchLayer = document.getElementById('touchLayer');
+
+                const params = new URLSearchParams(window.location.search);
+                const seedFromUrl = params.get('seed');
+                if (seedFromUrl) this.seedInput.value = seedFromUrl;
+
+                this.hint.textContent = this.isTouch
+                    ? 'スティックで移動 · 右ドラッグで視点 · Jump / Break / Place'
+                    : 'WASD 移動 · Space ジャンプ · 左クリックで破壊 · 右クリックで設置';
+
+                this.randomSeedBtn.addEventListener('click', () => {
+                    this.seedInput.value = this.randomSeed();
+                });
+
+                const bindSlider = (input, valueEl, decimals = 1) => {
+                    const update = () => { valueEl.textContent = Number(input.value).toFixed(decimals); };
+                    input.addEventListener('input', update);
+                    update();
+                };
+                bindSlider(this.viewDistanceInput, this.viewDistanceValue, 0);
+                bindSlider(this.sensitivityInput, this.sensitivityValue, 1);
+                bindSlider(this.speedInput, this.speedValue, 1);
+                bindSlider(this.jumpInput, this.jumpValue, 1);
+
+                const beginActivation = (e) => {
+                    if (e) e.preventDefault();
+                    this.handleStart();
+                };
+                this.startBtn.addEventListener('touchend', beginActivation, { passive: false });
+                this.startBtn.addEventListener('click', beginActivation);
+
+                const openSettingsHandler = (e) => {
+                    if (e) e.preventDefault();
+                    this.openSettings(false);
+                };
+                this.gearBtn.addEventListener('touchend', openSettingsHandler, { passive: false });
+                this.gearBtn.addEventListener('click', openSettingsHandler);
+
+                document.addEventListener('keydown', (e) => {
+                    if (e.code === 'Escape' && this.active) {
+                        this.openSettings(false);
+                    }
+                });
+            }
+
+            applySettingsToPlayer() {
+                this.mouseSensitivity = Number(this.sensitivityInput.value);
+                this.touchSensitivity = Number(this.sensitivityInput.value);
+                if (this.player) {
+                    this.player.setSpeed(Number(this.speedInput.value));
+                    this.player.setJumpSpeed(Number(this.jumpInput.value));
+                }
+            }
+
+            handleStart() {
+                const seedValue = this.seedInput.value.trim() || this.randomSeed();
+                this.seedInput.value = seedValue;
+                const viewDistance = Number(this.viewDistanceInput.value);
+
+                if (!this.world || this.seed !== seedValue) {
+                    this.buildWorld(seedValue, viewDistance);
+                } else if (viewDistance !== this.viewDistance) {
+                    this.viewDistance = viewDistance;
+                    this.loadInitialChunks();
+                }
+
+                this.applySettingsToPlayer();
+                this.activate();
+            }
+
+            buildWorld(seedValue, viewDistance) {
+                if (this.mesher) {
+                    for (const meshes of this.mesher.meshes.values()) {
+                        for (const mesh of meshes) {
+                            this.scene.remove(mesh);
+                            mesh.geometry.dispose();
+                        }
+                    }
+                }
+
+                this.seed = seedValue;
+                this.viewDistance = viewDistance;
+                this.world = new World(this.seed);
+                this.mesher = new ChunkMesher(this.scene, this.world);
+                this.player = new Player(this.camera, this.world);
+
+                this.euler.set(0, 0, 0);
+                this.camera.quaternion.setFromEuler(this.euler);
+
+                this.loadInitialChunks();
+                this.player.spawnAt(8, 8);
+
+                this.raycaster = new THREE.Raycaster();
+                this.raycaster.far = 8;
+                this.heldBlock = BlockType.STONE;
+
+                this.seedLabel.textContent = `Seed: ${this.seed}`;
+            }
+
+            loadInitialChunks() {
+                for (let cx = -this.viewDistance; cx <= this.viewDistance; cx++) {
+                    for (let cz = -this.viewDistance; cz <= this.viewDistance; cz++) {
+                        this.world.ensureChunk(cx, cz);
+                    }
+                }
+                for (let cx = -this.viewDistance; cx <= this.viewDistance; cx++) {
+                    for (let cz = -this.viewDistance; cz <= this.viewDistance; cz++) {
+                        this.mesher.buildChunkMesh(cx, cz);
+                    }
+                }
+                this.world.dirty.clear();
+            }
+
+            activate() {
+                this.settingsOpen = false;
+                this.overlay.classList.add('hidden');
+                this.crosshair.style.display = 'block';
+                this.hint.style.display = 'block';
+                this.seedLabel.style.display = 'block';
+                this.gearBtn.style.display = 'flex';
+
+                if (this.isTouch) {
+                    this.touchLayer.style.display = 'block';
+                    if (!this.touchControlsBound) {
+                        this.initTouchControls();
+                        this.touchControlsBound = true;
+                    }
+                    this.active = true;
+                } else {
+                    this.touchLayer.style.display = 'none';
+                    this.active = true;
+                    document.body.requestPointerLock();
+                }
+            }
+
+            openSettings(fromUnlock) {
+                this.settingsOpen = true;
+                this.active = false;
+                this.overlay.classList.remove('hidden');
+                this.crosshair.style.display = 'none';
+                this.hint.style.display = 'none';
+                this.gearBtn.style.display = 'none';
+                this.touchLayer.style.display = 'none';
+
+                if (!this.isTouch && !fromUnlock && document.pointerLockElement === document.body) {
+                    document.exitPointerLock();
+                }
+            }
+
             initInteraction() {
                 document.addEventListener('mousedown', (e) => {
-                    if (this.isTouch) return;
-                    if (!this.controls.isLocked) return;
+                    if (this.isTouch || !this.active) return;
                     if (e.button === 0) this.handleBreak();
                     if (e.button === 2) this.handlePlace();
                 });
                 document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+                document.addEventListener('mousemove', (e) => {
+                    if (this.isTouch || !this.active || this.settingsOpen) return;
+                    const movementX = e.movementX || 0;
+                    const movementY = e.movementY || 0;
+                    const sens = 0.0022 * this.mouseSensitivity;
+                    this.euler.y -= movementX * sens;
+                    this.euler.x -= movementY * sens;
+                    this.euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.euler.x));
+                    this.camera.quaternion.setFromEuler(this.euler);
+                });
             }
 
             initTouchControls() {
@@ -827,7 +1108,6 @@
                 const breakBtn = document.getElementById('breakBtn');
                 const placeBtn = document.getElementById('placeBtn');
 
-                const lookSensitivity = 0.0035;
                 let lookTouchId = null;
                 let lastLookX = 0;
                 let lastLookY = 0;
@@ -849,8 +1129,9 @@
                         lastLookX = t.clientX;
                         lastLookY = t.clientY;
 
-                        this.euler.y -= dx * lookSensitivity;
-                        this.euler.x -= dy * lookSensitivity;
+                        const sens = 0.0035 * this.touchSensitivity;
+                        this.euler.y -= dx * sens;
+                        this.euler.x -= dy * sens;
                         this.euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.euler.x));
                         this.camera.quaternion.setFromEuler(this.euler);
                     }
@@ -881,8 +1162,10 @@
 
                 const resetStick = () => {
                     joystickStick.style.transform = 'translate(0px, 0px)';
-                    this.player.virtualMove.x = 0;
-                    this.player.virtualMove.y = 0;
+                    if (this.player) {
+                        this.player.virtualMove.x = 0;
+                        this.player.virtualMove.y = 0;
+                    }
                 };
 
                 joystickZone.addEventListener('touchstart', (e) => {
@@ -921,11 +1204,11 @@
 
                 jumpBtn.addEventListener('touchstart', (e) => {
                     e.preventDefault();
-                    this.player.virtualJump = true;
+                    if (this.player) this.player.virtualJump = true;
                 }, { passive: false });
                 jumpBtn.addEventListener('touchend', (e) => {
                     e.preventDefault();
-                    this.player.virtualJump = false;
+                    if (this.player) this.player.virtualJump = false;
                 });
 
                 breakBtn.addEventListener('touchstart', (e) => {
@@ -943,10 +1226,6 @@
                 this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
                 const origin = this.raycaster.ray.origin;
                 const dir = this.raycaster.ray.direction;
-
-                let x = Math.floor(origin.x);
-                let y = Math.floor(origin.y);
-                let z = Math.floor(origin.z);
 
                 const step = 0.05;
                 for (let t = 0; t < this.raycaster.far; t += step) {
@@ -1011,7 +1290,7 @@
                 requestAnimationFrame(this.animate);
                 const dt = Math.min(this.clock.getDelta(), 0.1);
 
-                if (this.controls.isLocked) {
+                if (this.active && this.player) {
                     this.player.update(dt, this.controls);
                 }
 
