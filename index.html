@@ -19,29 +19,40 @@
         /* ============ HUD (icon-only, CSS-drawn) ============ */
         #crosshair {
             position: absolute; top: 50%; left: 50%;
-            width: 18px; height: 18px;
+            width: 20px; height: 20px;
             transform: translate(-50%, -50%);
             pointer-events: none; display: none; z-index: 5;
+            mix-blend-mode: difference;
         }
         #crosshair::before, #crosshair::after {
-            content: ""; position: absolute; background: rgba(255,255,255,0.85);
-            box-shadow: 0 0 2px rgba(0,0,0,0.6);
+            content: ""; position: absolute; background: #fff;
         }
-        #crosshair::before { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
-        #crosshair::after { top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%); }
-        #crosshair .gap { position: absolute; inset: 6px; background: transparent; }
+        #crosshair::before { left: 50%; top: 2px; width: 2px; height: 16px; transform: translateX(-50%); }
+        #crosshair::after { top: 50%; left: 2px; height: 2px; width: 16px; transform: translateY(-50%); }
+        #crosshair .gap { display: none; }
+        /* Block-crack overlay: a 4x4 grid of squares that fill in with a
+           noisy dark/light pattern as mining progresses (like Minecraft's
+           breaking-stage texture), instead of a simple radial ring. */
         #miningProgressRing {
             position: absolute; top: 50%; left: 50%;
-            width: 34px; height: 34px;
+            width: 40px; height: 40px;
             transform: translate(-50%, -50%);
-            border-radius: 50%;
             pointer-events: none;
             display: none;
             z-index: 5;
-            background: conic-gradient(#fff 0deg, transparent 0deg);
-            opacity: 0.9;
-            -webkit-mask: radial-gradient(circle, transparent 60%, #000 62%);
-                    mask: radial-gradient(circle, transparent 60%, #000 62%);
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            gap: 1px;
+            mix-blend-mode: difference;
+        }
+        #miningProgressRing .crack-cell {
+            background: transparent;
+        }
+        #miningProgressRing .crack-cell.on {
+            background: #fff;
+        }
+        #miningProgressRing .crack-cell.on.dim {
+            background: rgba(255,255,255,0.45);
         }
 
         #hint {
@@ -154,65 +165,93 @@
         }
 
         /* ============ Status bars (hearts / hunger) ============ */
+        /* Pixel-art style hearts/drumsticks built from a small grid of
+           squares (clip-path) rather than rounded CSS shapes, to match
+           Minecraft's blocky icon look. Each icon is drawn on a 7x7 grid. */
         #statusBars {
             position: absolute; left: 50%; transform: translateX(-50%);
-            bottom: 118px; display: none; flex-direction: column; gap: 3px; z-index: 6;
+            bottom: 122px; display: none; flex-direction: column; gap: 2px; z-index: 6;
             pointer-events: none;
         }
         .bar-row { display: flex; gap: 2px; }
-        .bar-icon { width: 14px; height: 14px; position: relative; }
-        .icon-heart { background: transparent; }
-        .icon-heart::before, .icon-heart::after {
-            content: ""; position: absolute; top: 0; width: 8px; height: 8px;
-            background: #e0463f; border-radius: 50% 50% 0 0;
+        .bar-icon {
+            width: 16px; height: 16px; position: relative;
+            filter: drop-shadow(1px 1px 0 rgba(0,0,0,0.55));
         }
-        .icon-heart::before { left: 0; transform: rotate(-45deg); transform-origin: bottom right; }
-        .icon-heart::after { right: 0; transform: rotate(45deg); transform-origin: bottom left; }
-        .icon-heart.empty::before, .icon-heart.empty::after { background: rgba(255,255,255,0.15); }
-        .icon-heart.half::after { background: rgba(255,255,255,0.15); }
-        .icon-drumstick { position: relative; }
-        .icon-drumstick::before {
-            content: ""; position: absolute; left: 2px; top: 2px; width: 9px; height: 7px;
-            background: #c8874a; border-radius: 50% 50% 40% 40%;
+        .icon-heart {
+            background: #e0463f;
+            clip-path: polygon(
+                14% 28%, 14% 14%, 28% 0%, 43% 0%, 50% 14%,
+                57% 0%, 72% 0%, 86% 14%, 86% 28%,
+                50% 100%, 14% 28%
+            );
+        }
+        .icon-heart.empty { background: rgba(255,255,255,0.18); }
+        .icon-heart.half {
+            background: linear-gradient(90deg, #e0463f 0%, #e0463f 50%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.18) 100%);
+        }
+        .icon-drumstick {
+            background: #a1543a;
+            clip-path: polygon(
+                55% 0%, 85% 8%, 100% 30%, 95% 52%,
+                75% 62%, 62% 78%, 68% 92%, 55% 100%,
+                40% 88%, 48% 74%, 30% 60%,
+                8% 45%, 5% 22%, 25% 5%
+            );
         }
         .icon-drumstick::after {
-            content: ""; position: absolute; right: 1px; bottom: 0; width: 5px; height: 5px;
-            background: #e8dcc8; border-radius: 50%;
+            content: ""; position: absolute; right: 0; bottom: 0; width: 6px; height: 6px;
+            background: #f0e4cf; border-radius: 1px;
         }
-        .icon-drumstick.empty::before { background: rgba(255,255,255,0.15); }
+        .icon-drumstick.empty { background: rgba(255,255,255,0.16); }
         .icon-drumstick.empty::after { background: rgba(255,255,255,0.1); }
 
         /* ============ Hotbar ============ */
+        /* Minecraft-style stone slot: mid-grey face, light bevel top/left,
+           dark bevel bottom/right, thin black outline - drawn entirely with
+           CSS borders/box-shadow (no images). */
         #hotbar {
             position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
-            display: none; z-index: 10; gap: 4px;
+            display: none; z-index: 10; gap: 0;
+            padding: 3px;
+            background: rgba(20,20,20,0.55);
+            border-radius: 2px;
         }
         .slot {
             width: 44px; height: 44px;
-            background: rgba(20,20,24,0.65);
-            border: 2px solid rgba(255,255,255,0.25);
-            border-radius: 6px;
+            background: #8b8b8b;
+            border-top: 3px solid #c6c6c6;
+            border-left: 3px solid #c6c6c6;
+            border-right: 3px solid #373737;
+            border-bottom: 3px solid #373737;
+            box-shadow: 0 0 0 2px #000;
+            margin: 1px;
             position: relative;
             display: flex; align-items: center; justify-content: center;
         }
-        .slot.selected { border-color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,0.6) inset; }
+        .slot.selected {
+            border-top-color: #fff; border-left-color: #fff;
+            border-right-color: #ddd; border-bottom-color: #ddd;
+            box-shadow: 0 0 0 2px #000, 0 0 0 4px #fff;
+            z-index: 1;
+        }
         .slot .swatch {
-            width: 26px; height: 26px; border-radius: 3px;
-            border-top: 2px solid rgba(255,255,255,0.45);
-            border-left: 2px solid rgba(255,255,255,0.3);
-            border-right: 2px solid rgba(0,0,0,0.3);
-            border-bottom: 2px solid rgba(0,0,0,0.4);
+            width: 28px; height: 28px;
+            border-top: 3px solid rgba(255,255,255,0.45);
+            border-left: 3px solid rgba(255,255,255,0.3);
+            border-right: 3px solid rgba(0,0,0,0.35);
+            border-bottom: 3px solid rgba(0,0,0,0.45);
         }
         .slot .count {
-            position: absolute; right: 3px; bottom: 1px;
-            font-size: 11px; color: #fff; text-shadow: 1px 1px 1px #000; font-weight: 700;
+            position: absolute; right: 2px; bottom: 0px;
+            font-size: 12px; color: #fff; text-shadow: 1px 1px 0 #000; font-weight: 700;
         }
         .slot .key-label {
-            position: absolute; left: 3px; top: 1px;
-            font-size: 9px; color: rgba(255,255,255,0.6);
+            position: absolute; left: 2px; top: 0px;
+            font-size: 9px; color: #e8e8e8; text-shadow: 1px 1px 0 #000;
         }
-        #offhandWrap { display: flex; align-items: center; margin-right: 6px; }
-        #offhandWrap .slot { border-color: rgba(180,150,255,0.5); }
+        #offhandWrap { display: flex; align-items: center; margin-right: 4px; }
+        #offhandWrap .slot { border-top-color: #b8a8d8; }
 
         /* ============ Inventory screen ============ */
         #inventoryScreen {
@@ -222,27 +261,59 @@
         }
         #inventoryPanel {
             width: min(480px, 94vw);
-            background: rgba(24,26,32,0.96);
-            border: 1px solid rgba(255,255,255,0.15);
-            border-radius: 14px;
-            padding: 18px;
-            color: white;
+            background: #c6c6c6;
+            border-top: 3px solid #fff;
+            border-left: 3px solid #fff;
+            border-right: 3px solid #555;
+            border-bottom: 3px solid #555;
+            box-shadow: 0 0 0 2px #000, 0 6px 18px rgba(0,0,0,0.5);
+            padding: 16px;
+            color: #2b2b2b;
             max-height: 90vh;
             overflow-y: auto;
         }
-        #inventoryPanel h2 { margin: 0 0 4px; font-size: 16px; }
-        #inventoryPanel .sub { margin: 0 0 14px; font-size: 12px; color: rgba(255,255,255,0.55); }
-        .inv-grid { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; margin-bottom: 12px; }
-        .inv-grid .slot { width: 100%; height: auto; aspect-ratio: 1 / 1; }
-        .creative-picker { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; margin-top: 6px; }
-        .inv-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.45); margin: 14px 0 6px; }
-        #closeInvBtn { width: 100%; margin-top: 10px; }
+        #inventoryPanel h2 {
+            margin: 0 0 4px; font-size: 15px; font-weight: 700;
+            text-shadow: 1px 1px 0 rgba(255,255,255,0.3);
+        }
+        #inventoryPanel .sub { margin: 0 0 14px; font-size: 11px; color: #555; }
+        .inv-grid { display: grid; grid-template-columns: repeat(9, 1fr); gap: 0; margin-bottom: 10px; }
+        .inv-grid .slot { width: 100%; height: auto; aspect-ratio: 1 / 1; margin: 1px; }
+        .creative-picker { display: grid; grid-template-columns: repeat(9, 1fr); gap: 0; margin-top: 4px; }
+        .creative-picker .slot { width: 100%; height: auto; aspect-ratio: 1 / 1; margin: 1px; cursor: pointer; }
+        .inv-section-title {
+            font-size: 11px; font-weight: 700; letter-spacing: 0.02em; color: #3a3a3a;
+            margin: 12px 0 6px;
+        }
+        #creativeSearch {
+            width: 100%; box-sizing: border-box; padding: 7px 8px; margin-bottom: 6px;
+            background: #fff; color: #2b2b2b; font-size: 13px;
+            border-top: 2px solid #555; border-left: 2px solid #555;
+            border-right: 2px solid #eee; border-bottom: 2px solid #eee;
+            border-radius: 0;
+        }
+        #creativeSearch:focus { outline: 2px solid #4caf50; }
+        #closeInvBtn {
+            width: 100%; margin-top: 10px;
+            background: #8b8b8b; color: #fff;
+            border-top: 3px solid #c6c6c6; border-left: 3px solid #c6c6c6;
+            border-right: 3px solid #373737; border-bottom: 3px solid #373737;
+            border-radius: 0; font-weight: 700; text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+        }
+        #closeInvBtn:hover { background: #9b9b9b; }
 
         /* ============ Settings overlay ============ */
         #overlay {
             position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
             background: linear-gradient(180deg, #1b2735, #090a0f);
             z-index: 100; color: white;
+        }
+        /* Once a world exists, the overlay itself goes transparent so the live
+           (HUD-less) game canvas shows through behind the settings panel -
+           only a dim scrim is added for legibility. This makes it clear the
+           world/player state is untouched while settings are open. */
+        #overlay.in-world {
+            background: rgba(8, 10, 14, 0.35);
         }
         #overlay.hidden { display: none; }
         #panel {
@@ -262,15 +333,19 @@
         }
         .field input[type="text"]:focus { outline: 2px solid #4caf50; }
         .btn {
-            padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.25);
-            background: rgba(255,255,255,0.08); color: white; font-size: 13px; cursor: pointer; white-space: nowrap;
+            padding: 10px 14px; border-radius: 2px;
+            border-top: 2px solid rgba(255,255,255,0.35); border-left: 2px solid rgba(255,255,255,0.35);
+            border-right: 2px solid rgba(0,0,0,0.35); border-bottom: 2px solid rgba(0,0,0,0.35);
+            background: #6b6b6b; color: white; font-size: 13px; font-weight: 600;
+            text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+            cursor: pointer; white-space: nowrap;
         }
-        .btn:hover { background: rgba(255,255,255,0.16); }
-        .btn.primary { background: #4caf50; border-color: #4caf50; font-weight: 600; }
-        .btn.primary:hover { background: #43a047; }
-        .mode-toggle { display: flex; gap: 8px; }
+        .btn:hover { background: #7a7a7a; }
+        .btn.primary { background: #4caf50; }
+        .btn.primary:hover { background: #58bb5a; }
+        .mode-toggle { display: flex; gap: 4px; }
         .mode-toggle .btn { flex: 1; }
-        .mode-toggle .btn.active { background: #4caf50; border-color: #4caf50; font-weight: 700; }
+        .mode-toggle .btn.active { background: #4caf50; font-weight: 700; }
         .slider-row { display: flex; align-items: center; gap: 10px; }
         .slider-row input[type="range"] { flex: 1; }
         .slider-row .value { width: 42px; text-align: right; font-size: 12px; color: rgba(255,255,255,0.7); }
@@ -317,6 +392,7 @@
             <div id="mainGrid" class="inv-grid"></div>
             <div id="creativeSection" style="display:none;">
                 <div class="inv-section-title">アイテムを取得（クリエイティブ）</div>
+                <input type="text" id="creativeSearch" placeholder="検索..." autocomplete="off">
                 <div id="creativeGrid" class="creative-picker"></div>
             </div>
             <button class="btn primary" id="closeInvBtn">閉じる</button>
@@ -347,8 +423,8 @@
             <div class="field">
                 <label>視野距離（チャンク数）</label>
                 <div class="slider-row">
-                    <input type="range" id="viewDistanceInput" min="1" max="6" step="1" value="3">
-                    <span class="value" id="viewDistanceValue">3</span>
+                    <input type="range" id="viewDistanceInput" min="1" max="6" step="1" value="1">
+                    <span class="value" id="viewDistanceValue">1</span>
                 </div>
             </div>
 
@@ -1166,6 +1242,11 @@ class Engine {
 
     randomSeed() { return 'seed-' + Math.floor(Math.random() * 1e9); }
 
+    hashInt(n) {
+        const s = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
+        return s - Math.floor(s);
+    }
+
     /* ---------- input mode switching ---------- */
     initInputModeDetection() {
         const toTouch = () => this.setInputMode('touch');
@@ -1271,6 +1352,19 @@ class Engine {
         this.invBtn = document.getElementById('invBtn');
         this.crosshair = document.getElementById('crosshair');
         this.miningRing = document.getElementById('miningProgressRing');
+        this.miningCells = [];
+        for (let i = 0; i < 16; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'crack-cell';
+            this.miningRing.appendChild(cell);
+            this.miningCells.push(cell);
+        }
+        // fixed random reveal order so the crack pattern looks organic
+        this.miningCellOrder = [...Array(16).keys()];
+        for (let i = this.miningCellOrder.length - 1; i > 0; i--) {
+            const j = Math.floor(this.hashInt(i) * (i + 1));
+            [this.miningCellOrder[i], this.miningCellOrder[j]] = [this.miningCellOrder[j], this.miningCellOrder[i]];
+        }
         this.hint = document.getElementById('hint');
         this.seedLabel = document.getElementById('seedLabel');
         this.touchLayer = document.getElementById('touchLayer');
@@ -1478,6 +1572,7 @@ class Engine {
         this.settingsOpen = true;
         this.active = false;
         this.overlay.classList.remove('hidden');
+        this.overlay.classList.toggle('in-world', !!this.world);
         this.crosshair.style.display = 'none';
         this.miningRing.style.display = 'none';
         this.hint.style.display = 'none';
@@ -1507,16 +1602,28 @@ class Engine {
         this.mainGrid = document.getElementById('mainGrid');
         this.creativeSection = document.getElementById('creativeSection');
         this.creativeGrid = document.getElementById('creativeGrid');
+        this.creativeSearch = document.getElementById('creativeSearch');
         this.invSub = document.getElementById('invSub');
         this.closeInvBtn = document.getElementById('closeInvBtn');
 
         this.closeInvBtn.addEventListener('click', () => this.closeInventory());
 
-        // build creative palette buttons once
+        this.creativeSearch.addEventListener('input', () => {
+            this.renderCreativePalette(this.creativeSearch.value);
+        });
+
+        this.renderCreativePalette('');
+    }
+
+    renderCreativePalette(query) {
+        const q = query.trim().toLowerCase();
+        this.creativeGrid.innerHTML = '';
         for (const type of CREATIVE_PALETTE) {
+            const name = BLOCK_NAMES[type] || '';
+            if (q && !name.toLowerCase().includes(q)) continue;
             const slot = document.createElement('div');
             slot.className = 'slot';
-            slot.title = BLOCK_NAMES[type];
+            slot.title = name;
             const swatch = document.createElement('div');
             swatch.className = 'swatch';
             swatch.style.background = '#' + BLOCK_COLORS[type].toString(16).padStart(6, '0');
@@ -1539,6 +1646,10 @@ class Engine {
         this.invSub.textContent = this.player.mode === 'creative'
             ? 'クリエイティブ: 下のブロックをタップすると持ち物に追加されます'
             : 'ホットバー・オフハンド・インベントリの中身';
+        if (this.player.mode === 'creative') {
+            this.creativeSearch.value = '';
+            this.renderCreativePalette('');
+        }
         this.renderInventoryGrids();
 
         if (this.inputMode === 'keyboard' && document.pointerLockElement === document.body) {
@@ -1755,14 +1866,19 @@ class Engine {
         const joystickRect = () => joystickZone.getBoundingClientRect();
         const maxRadius = 45;
 
-        // Fix: forward (stick pushed up / -y screen) should map to virtualMove.y = +1 (forward).
-        // Screen dy negative (up) -> we want positive forward -> sy is negative when up,
-        // so forward = -sy / maxRadius. Strafe: sx positive (right) -> virtualMove.x positive (right).
+        // Forward (stick pushed up / -y screen) should map to virtualMove.y = +1 (forward).
+        // Directly clamp the raw dx/dy vector to maxRadius without an atan2->cos/sin
+        // round trip (the round trip added floating point error and, near dx=dy=0,
+        // could snap to an unstable angle - this was the source of the diagonal-move bug
+        // where pushing up-right would occasionally register as up-left).
         const updateStick = (dx, dy) => {
-            const dist = Math.min(Math.hypot(dx, dy), maxRadius);
-            const angle = Math.atan2(dy, dx);
-            const sx = Math.cos(angle) * dist;
-            const sy = Math.sin(angle) * dist;
+            const dist = Math.hypot(dx, dy);
+            let sx = dx, sy = dy;
+            if (dist > maxRadius) {
+                const scale = maxRadius / dist;
+                sx = dx * scale;
+                sy = dy * scale;
+            }
             joystickStick.style.transform = `translate(${sx}px, ${sy}px)`;
             this.player.virtualMove.x = sx / maxRadius;
             this.player.virtualMove.y = -sy / maxRadius;
@@ -1834,7 +1950,23 @@ class Engine {
 
         bindHold(flyUpBtn, () => { if (this.player) this.player.virtualFlyUp = true; }, () => { if (this.player) this.player.virtualFlyUp = false; });
         bindHold(flyDownBtn, () => { if (this.player) this.player.virtualFlyDown = true; }, () => { if (this.player) this.player.virtualFlyDown = false; });
-        bindHold(breakBtn, () => this.startMining(), () => this.stopMining());
+
+        // Break = long-press (touch only): a short hold delay must elapse
+        // before mining actually starts, so a quick tap does nothing.
+        // Place = single tap (handled in bindHold's onDown, fires once).
+        const BREAK_HOLD_DELAY = 300; // ms
+        let breakHoldTimer = null;
+        bindHold(
+            breakBtn,
+            () => {
+                clearTimeout(breakHoldTimer);
+                breakHoldTimer = setTimeout(() => this.startMining(), BREAK_HOLD_DELAY);
+            },
+            () => {
+                clearTimeout(breakHoldTimer);
+                this.stopMining();
+            }
+        );
         bindHold(placeBtn, () => this.handlePlace(), () => {});
 
         // show/hide fly buttons depending on mode
@@ -1883,27 +2015,49 @@ class Engine {
 
     stopMining() {
         this.mining = null;
+        this.clearMiningCells();
         this.miningRing.style.display = 'none';
     }
 
+    clearMiningCells() {
+        if (!this.miningCells) return;
+        for (const cell of this.miningCells) cell.classList.remove('on', 'dim');
+    }
+
     updateMining(dt) {
-        if (!this.mining) { this.miningRing.style.display = 'none'; return; }
+        if (!this.mining) { this.clearMiningCells(); this.miningRing.style.display = 'none'; return; }
 
         // re-verify target still valid & still aimed at (simple: re-raycast each frame while holding)
         const result = this.castBlockRay();
         if (!result || result.hit[0] !== this.mining.x || result.hit[1] !== this.mining.y || result.hit[2] !== this.mining.z) {
             this.mining = null;
+            this.clearMiningCells();
             this.miningRing.style.display = 'none';
             return;
         }
 
         this.mining.progress += dt;
         const pct = Math.min(1, this.mining.progress / Math.max(this.mining.timeNeeded, 0.0001));
-        this.miningRing.style.display = 'block';
-        this.miningRing.style.background = `conic-gradient(#fff ${pct * 360}deg, rgba(255,255,255,0.15) ${pct * 360}deg)`;
+        this.miningRing.style.display = 'grid';
+        this.renderMiningCells(pct);
 
         if (this.mining.progress >= this.mining.timeNeeded) {
             this.finishMining();
+        }
+    }
+
+    renderMiningCells(pct) {
+        const total = this.miningCells.length;
+        const revealCount = Math.floor(pct * total);
+        const partial = pct * total - revealCount; // fractional progress on the next cell
+        for (let i = 0; i < total; i++) {
+            const cell = this.miningCells[this.miningCellOrder[i]];
+            cell.classList.remove('on', 'dim');
+            if (i < revealCount) {
+                cell.classList.add('on');
+            } else if (i === revealCount && partial > 0.35) {
+                cell.classList.add('on', 'dim');
+            }
         }
     }
 
@@ -1925,6 +2079,7 @@ class Engine {
         }
 
         this.mining = null;
+        this.clearMiningCells();
         this.miningRing.style.display = 'none';
     }
 
