@@ -51,12 +51,105 @@
             pointer-events: none;
             display: none;
         }
+        #touchLayer {
+            position: absolute;
+            inset: 0;
+            display: none;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        #lookZone {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 60%;
+            height: 100%;
+            z-index: 1;
+        }
+        #joystickZone {
+            position: absolute;
+            left: 24px;
+            bottom: 24px;
+            width: 130px;
+            height: 130px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.12);
+            border: 2px solid rgba(255,255,255,0.35);
+            z-index: 2;
+        }
+        #joystickStick {
+            position: absolute;
+            left: 41px;
+            top: 41px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.55);
+            pointer-events: none;
+        }
+        .touch-btn {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.18);
+            border: 2px solid rgba(255,255,255,0.4);
+            color: white;
+            font-family: sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            text-align: center;
+            line-height: 1.2;
+            z-index: 2;
+        }
+        #jumpBtn {
+            right: 28px;
+            bottom: 130px;
+            width: 74px;
+            height: 74px;
+        }
+        #breakBtn {
+            right: 110px;
+            bottom: 32px;
+            width: 64px;
+            height: 64px;
+        }
+        #placeBtn {
+            right: 24px;
+            bottom: 32px;
+            width: 64px;
+            height: 64px;
+        }
+        #startBtn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 16px 32px;
+            font-size: 20px;
+            font-family: sans-serif;
+            border-radius: 8px;
+            border: none;
+            background: #4caf50;
+            color: white;
+        }
     </style>
 </head>
 <body>
-    <div id="ui">Click to Lock Pointer</div>
+    <div id="ui">
+        <div id="desktopStart">Click to Lock Pointer</div>
+        <button id="startBtn" style="display:none;">Tap to Start</button>
+    </div>
     <div id="crosshair"></div>
     <div id="hint">WASD move · Space jump · Left click break · Right click place</div>
+    <div id="touchLayer">
+        <div id="lookZone"></div>
+        <div id="joystickZone"><div id="joystickStick"></div></div>
+        <div id="jumpBtn" class="touch-btn">Jump</div>
+        <div id="breakBtn" class="touch-btn">Break</div>
+        <div id="placeBtn" class="touch-btn">Place</div>
+    </div>
     <script type="importmap">
         {
             "imports": {
@@ -363,6 +456,9 @@
                 this.keys = {};
                 document.addEventListener('keydown', (e) => this.keys[e.code] = true);
                 document.addEventListener('keyup', (e) => this.keys[e.code] = false);
+
+                this.virtualMove = { x: 0, y: 0 };
+                this.virtualJump = false;
             }
 
             checkCollision(x, y, z) {
@@ -396,13 +492,17 @@
                 if (this.keys['KeyD']) { moveX += right.x; moveZ += right.z; }
                 if (this.keys['KeyA']) { moveX -= right.x; moveZ -= right.z; }
 
+                moveX += forward.x * this.virtualMove.y + right.x * this.virtualMove.x;
+                moveZ += forward.z * this.virtualMove.y + right.z * this.virtualMove.x;
+
                 const len = Math.hypot(moveX, moveZ);
                 if (len > 0) {
-                    moveX = (moveX / len) * this.speed;
-                    moveZ = (moveZ / len) * this.speed;
+                    const clampedLen = Math.min(len, 1);
+                    moveX = (moveX / len) * this.speed * clampedLen;
+                    moveZ = (moveZ / len) * this.speed * clampedLen;
                 }
 
-                if (this.onGround && this.keys['Space']) {
+                if (this.onGround && (this.keys['Space'] || this.virtualJump)) {
                     this.velocity.y = this.jumpSpeed;
                     this.onGround = false;
                 }
@@ -447,8 +547,10 @@
 
         class Engine {
             constructor() {
+                this.isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
                 this.world = new World();
                 this.viewDistance = 3;
+                this.active = false;
 
                 this.initScene();
                 this.initRenderer();
@@ -464,6 +566,8 @@
                 this.raycaster = new THREE.Raycaster();
                 this.raycaster.far = 8;
                 this.initInteraction();
+
+                if (this.isTouch) this.initTouchControls();
 
                 window.addEventListener('resize', this.onWindowResize.bind(this));
                 this.animate = this.animate.bind(this);
@@ -503,26 +607,62 @@
             }
 
             initControls() {
-                this.controls = new PointerLockControls(this.camera, document.body);
                 const ui = document.getElementById('ui');
                 const crosshair = document.getElementById('crosshair');
                 const hint = document.getElementById('hint');
+                const touchLayer = document.getElementById('touchLayer');
+                const desktopStart = document.getElementById('desktopStart');
+                const startBtn = document.getElementById('startBtn');
 
-                document.addEventListener('click', () => {
-                    this.controls.lock();
-                });
+                if (this.isTouch) {
+                    desktopStart.style.display = 'none';
+                    startBtn.style.display = 'block';
 
-                this.controls.addEventListener('lock', () => {
-                    ui.style.display = 'none';
-                    crosshair.style.display = 'block';
-                    hint.style.display = 'block';
-                });
+                    this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
+                    this.euler.setFromQuaternion(this.camera.quaternion);
 
-                this.controls.addEventListener('unlock', () => {
-                    ui.style.display = 'block';
-                    crosshair.style.display = 'none';
-                    hint.style.display = 'none';
-                });
+                    const activate = () => {
+                        this.active = true;
+                        ui.style.display = 'none';
+                        crosshair.style.display = 'block';
+                        hint.style.display = 'block';
+                        touchLayer.style.display = 'block';
+                    };
+                    startBtn.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        activate();
+                    });
+                    startBtn.addEventListener('click', activate);
+
+                    this.controls = {
+                        isLocked: false,
+                        getDirection: (target) => {
+                            target.set(0, 0, -1).applyEuler(this.euler);
+                            return target;
+                        }
+                    };
+                    Object.defineProperty(this.controls, 'isLocked', {
+                        get: () => this.active
+                    });
+                } else {
+                    this.controls = new PointerLockControls(this.camera, document.body);
+
+                    document.addEventListener('click', () => {
+                        this.controls.lock();
+                    });
+
+                    this.controls.addEventListener('lock', () => {
+                        ui.style.display = 'none';
+                        crosshair.style.display = 'block';
+                        hint.style.display = 'block';
+                    });
+
+                    this.controls.addEventListener('unlock', () => {
+                        ui.style.display = 'block';
+                        crosshair.style.display = 'none';
+                        hint.style.display = 'none';
+                    });
+                }
             }
 
             initLighting() {
@@ -536,11 +676,132 @@
 
             initInteraction() {
                 document.addEventListener('mousedown', (e) => {
+                    if (this.isTouch) return;
                     if (!this.controls.isLocked) return;
                     if (e.button === 0) this.handleBreak();
                     if (e.button === 2) this.handlePlace();
                 });
                 document.addEventListener('contextmenu', (e) => e.preventDefault());
+            }
+
+            initTouchControls() {
+                const lookZone = document.getElementById('lookZone');
+                const joystickZone = document.getElementById('joystickZone');
+                const joystickStick = document.getElementById('joystickStick');
+                const jumpBtn = document.getElementById('jumpBtn');
+                const breakBtn = document.getElementById('breakBtn');
+                const placeBtn = document.getElementById('placeBtn');
+
+                const lookSensitivity = 0.0035;
+                let lookTouchId = null;
+                let lastLookX = 0;
+                let lastLookY = 0;
+
+                lookZone.addEventListener('touchstart', (e) => {
+                    if (!this.active) return;
+                    const t = e.changedTouches[0];
+                    lookTouchId = t.identifier;
+                    lastLookX = t.clientX;
+                    lastLookY = t.clientY;
+                }, { passive: true });
+
+                lookZone.addEventListener('touchmove', (e) => {
+                    if (!this.active) return;
+                    for (const t of e.changedTouches) {
+                        if (t.identifier !== lookTouchId) continue;
+                        const dx = t.clientX - lastLookX;
+                        const dy = t.clientY - lastLookY;
+                        lastLookX = t.clientX;
+                        lastLookY = t.clientY;
+
+                        this.euler.y -= dx * lookSensitivity;
+                        this.euler.x -= dy * lookSensitivity;
+                        this.euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.euler.x));
+                        this.camera.quaternion.setFromEuler(this.euler);
+                    }
+                    e.preventDefault();
+                }, { passive: false });
+
+                const clearLook = (e) => {
+                    for (const t of e.changedTouches) {
+                        if (t.identifier === lookTouchId) lookTouchId = null;
+                    }
+                };
+                lookZone.addEventListener('touchend', clearLook);
+                lookZone.addEventListener('touchcancel', clearLook);
+
+                let joystickTouchId = null;
+                const joystickRect = () => joystickZone.getBoundingClientRect();
+                const maxRadius = 45;
+
+                const updateStick = (dx, dy) => {
+                    const dist = Math.min(Math.hypot(dx, dy), maxRadius);
+                    const angle = Math.atan2(dy, dx);
+                    const sx = Math.cos(angle) * dist;
+                    const sy = Math.sin(angle) * dist;
+                    joystickStick.style.transform = `translate(${sx}px, ${sy}px)`;
+                    this.player.virtualMove.x = sx / maxRadius;
+                    this.player.virtualMove.y = -sy / maxRadius;
+                };
+
+                const resetStick = () => {
+                    joystickStick.style.transform = 'translate(0px, 0px)';
+                    this.player.virtualMove.x = 0;
+                    this.player.virtualMove.y = 0;
+                };
+
+                joystickZone.addEventListener('touchstart', (e) => {
+                    if (!this.active) return;
+                    const t = e.changedTouches[0];
+                    joystickTouchId = t.identifier;
+                    const rect = joystickRect();
+                    const cx = rect.left + rect.width / 2;
+                    const cy = rect.top + rect.height / 2;
+                    updateStick(t.clientX - cx, t.clientY - cy);
+                    e.preventDefault();
+                }, { passive: false });
+
+                joystickZone.addEventListener('touchmove', (e) => {
+                    if (!this.active) return;
+                    const rect = joystickRect();
+                    const cx = rect.left + rect.width / 2;
+                    const cy = rect.top + rect.height / 2;
+                    for (const t of e.changedTouches) {
+                        if (t.identifier !== joystickTouchId) continue;
+                        updateStick(t.clientX - cx, t.clientY - cy);
+                    }
+                    e.preventDefault();
+                }, { passive: false });
+
+                const clearJoystick = (e) => {
+                    for (const t of e.changedTouches) {
+                        if (t.identifier === joystickTouchId) {
+                            joystickTouchId = null;
+                            resetStick();
+                        }
+                    }
+                };
+                joystickZone.addEventListener('touchend', clearJoystick);
+                joystickZone.addEventListener('touchcancel', clearJoystick);
+
+                jumpBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.player.virtualJump = true;
+                }, { passive: false });
+                jumpBtn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    this.player.virtualJump = false;
+                });
+
+                breakBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    if (this.active) this.handleBreak();
+                }, { passive: false });
+
+                placeBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    if (this.active) this.handlePlace();
+                }, { passive: false });
             }
 
             castBlockRay() {
