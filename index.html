@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voxel Engine</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #ui {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-family: sans-serif;
+            font-size: 24px;
+            pointer-events: none;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">Click to Lock Pointer</div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+        class ChunkManager {
+            constructor(scene) {
+                this.scene = scene;
+                this.chunkSize = 16;
+                this.chunkHeight = 16;
+                this.blockSize = 1;
+                
+                const geometry = new THREE.BoxGeometry(this.blockSize, this.blockSize, this.blockSize);
+                const material = new THREE.MeshLambertMaterial({ color: 0x228b22 });
+                
+                this.maxInstances = this.chunkSize * this.chunkHeight * this.chunkSize;
+                this.mesh = new THREE.InstancedMesh(geometry, material, this.maxInstances);
+                this.scene.add(this.mesh);
+                
+                this.generateChunk();
+            }
+
+            generateChunk() {
+                let id = 0;
+                const matrix = new THREE.Matrix4();
+                
+                for (let x = 0; x < this.chunkSize; x++) {
+                    for (let y = 0; y < this.chunkHeight; y++) {
+                        for (let z = 0; z < this.chunkSize; z++) {
+                            if (y < 3 || Math.random() > 0.9) {
+                                matrix.setPosition(x * this.blockSize, y * this.blockSize, z * this.blockSize);
+                                this.mesh.setMatrixAt(id, matrix);
+                                id++;
+                            }
+                        }
+                    }
+                }
+                
+                this.mesh.count = id;
+                this.mesh.instanceMatrix.needsUpdate = true;
+            }
+        }
+
+        class Engine {
+            constructor() {
+                this.initScene();
+                this.initRenderer();
+                this.initControls();
+                this.initLighting();
+                
+                this.chunkManager = new ChunkManager(this.scene);
+                
+                window.addEventListener('resize', this.onWindowResize.bind(this));
+                this.animate = this.animate.bind(this);
+            }
+
+            initScene() {
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x87ceeb);
+                
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(8, 18, 8);
+            }
+
+            initRenderer() {
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: false, 
+                    powerPreference: "high-performance" 
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                document.body.appendChild(this.renderer.domElement);
+            }
+
+            initControls() {
+                this.controls = new PointerLockControls(this.camera, document.body);
+                const ui = document.getElementById('ui');
+                
+                document.addEventListener('click', () => {
+                    this.controls.lock();
+                });
+                
+                this.controls.addEventListener('lock', () => {
+                    ui.style.display = 'none';
+                });
+                
+                this.controls.addEventListener('unlock', () => {
+                    ui.style.display = 'block';
+                });
+            }
+
+            initLighting() {
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
+                directionalLight.position.set(10, 20, 10);
+                this.scene.add(directionalLight);
+                
+                const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
+                this.scene.add(ambientLight);
+            }
+
+            onWindowResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+            start() {
+                this.animate();
+            }
+
+            animate() {
+                requestAnimationFrame(this.animate);
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        const engine = new Engine();
+        engine.start();
+    </script>
+</body>
+</html>
