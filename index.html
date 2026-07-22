@@ -30,9 +30,6 @@
         #crosshair::before { left: 50%; top: 2px; width: 2px; height: 16px; transform: translateX(-50%); }
         #crosshair::after { top: 50%; left: 2px; height: 2px; width: 16px; transform: translateY(-50%); }
         #crosshair .gap { display: none; }
-        /* Block-crack overlay: a 4x4 grid of squares that fill in with a
-           noisy dark/light pattern as mining progresses (like Minecraft's
-           breaking-stage texture), instead of a simple radial ring. */
         #miningProgressRing {
             position: absolute; top: 50%; left: 50%;
             width: 40px; height: 40px;
@@ -74,7 +71,6 @@
             display: none; align-items: center; justify-content: center;
             z-index: 20; cursor: pointer;
         }
-        /* CSS gear icon */
         .icon-gear {
             width: 18px; height: 18px; border-radius: 50%;
             border: 3px solid #fff;
@@ -99,7 +95,6 @@
             transform: rotate(45deg);
         }
 
-        /* Inventory toggle button (backpack icon) */
         #invBtn {
             position: absolute; top: 12px; right: 62px;
             width: 40px; height: 40px; border-radius: 8px;
@@ -139,8 +134,7 @@
         }
         .touch-btn.active-touch { background: rgba(255,255,255,0.4); }
         #jumpBtn { right: 28px; bottom: 210px; width: 68px; height: 68px; }
-        #flyUpBtn { right: 110px; bottom: 210px; width: 54px; height: 54px; }
-        #flyDownBtn { right: 28px; bottom: 292px; width: 54px; height: 54px; }
+        #sneakBtn { right: 110px; bottom: 210px; width: 54px; height: 54px; }
         #breakBtn { right: 118px; bottom: 32px; width: 72px; height: 72px; }
         #placeBtn { right: 24px; bottom: 32px; width: 72px; height: 72px; }
         .icon-up { width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 12px solid #fff; }
@@ -165,9 +159,6 @@
         }
 
         /* ============ Status bars (hearts / hunger) ============ */
-        /* Pixel-art style hearts/drumsticks built from a small grid of
-           squares (clip-path) rather than rounded CSS shapes, to match
-           Minecraft's blocky icon look. Each icon is drawn on a 7x7 grid. */
         #statusBars {
             position: absolute; left: 50%; transform: translateX(-50%);
             bottom: 122px; display: none; flex-direction: column; gap: 2px; z-index: 6;
@@ -207,9 +198,6 @@
         .icon-drumstick.empty::after { background: rgba(255,255,255,0.1); }
 
         /* ============ Hotbar ============ */
-        /* Minecraft-style stone slot: mid-grey face, light bevel top/left,
-           dark bevel bottom/right, thin black outline - drawn entirely with
-           CSS borders/box-shadow (no images). */
         #hotbar {
             position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
             display: none; z-index: 10; gap: 0;
@@ -228,6 +216,7 @@
             margin: 1px;
             position: relative;
             display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
         }
         .slot.selected {
             border-top-color: #fff; border-left-color: #fff;
@@ -308,10 +297,6 @@
             background: linear-gradient(180deg, #1b2735, #090a0f);
             z-index: 100; color: white;
         }
-        /* Once a world exists, the overlay itself goes transparent so the live
-           (HUD-less) game canvas shows through behind the settings panel -
-           only a dim scrim is added for legibility. This makes it clear the
-           world/player state is untouched while settings are open. */
         #overlay.in-world {
             background: rgba(8, 10, 14, 0.35);
         }
@@ -374,8 +359,7 @@
         <div id="lookZone"></div>
         <div id="joystickZone"><div id="joystickStick"></div></div>
         <div id="jumpBtn" class="touch-btn"></div>
-        <div id="flyUpBtn" class="touch-btn"><div class="icon-up"></div></div>
-        <div id="flyDownBtn" class="touch-btn"><div class="icon-down"></div></div>
+        <div id="sneakBtn" class="touch-btn"><div class="icon-down"></div></div>
         <div id="breakBtn" class="touch-btn"><div class="icon-pick"></div></div>
         <div id="placeBtn" class="touch-btn"><div class="icon-block"></div></div>
     </div>
@@ -464,230 +448,152 @@ import { createNoise2D, createNoise3D } from 'simplex-noise';
 import alea from 'alea';
 
 /* =========================================================================
-   ROADMAP.md — Voxel Engine を「本格的なMinecraft再現」へ拡張するための
-   仕様書 / ロードマップ
+   ROADMAP.md — Voxel Engine 開発ログ / 今後の作業リスト
 
-   このコメントブロックは実装ガイドです。今回のリリースでは仕様書のみを
-   まとめており、各セクションのコードはまだ実装されていません（既存の
-   簡易ブロック配置ゲームがベースのまま動きます）。今後のセッションで
-   優先度順にセクションを1つずつ実装していく想定です。
-   実装時はこのコメントの該当セクションを "// [IMPLEMENTED]" のように
-   マークして進捗を追跡してください。
+   このコメントブロックは仕様書兼進捗ログです。変更を加えるたびに、
+   完了した項目には [DONE: 日付やセッション名] を、未着手の項目は
+   そのまま残して次回セッションが読めるようにしてください。
 
    ---------------------------------------------------------------------
-   全体方針
+   セッションA（今回）: 操作系バグ修正
    ---------------------------------------------------------------------
-   - 単一HTMLファイル構成は維持するが、内部はレジストリパターンで拡張する
-     （ブロック / アイテム / レシピ / Mob をそれぞれ中央データテーブルに
-     登録し、新要素追加時にゲームロジック本体を触らずに済むようにする）
-   - three.js のインスタンスドメッシュ / テクスチャアトラスを使い、
-     ブロック種類が増えてもドローコールが増えない設計にする
-   - 各システムは独立したクラス/モジュールとして実装し、Engineクラスが
-     それらを束ねるだけの薄いオーケストレーターになるようにする
-   - セーブデータ（World.chunks の内容、Inventory の中身）は将来的に
-     localStorage / IndexedDB へシリアライズできる形を意識する
-     （ただし artifacts 環境では localStorage は使用不可なので、実際の
-     永続化は window.storage 相当の仕組みか、エクスポート/インポートの
-     JSON ダウンロード機能で代替する）
+   [DONE] ホットバーのスロットをクリック/タップしても選択が切り替わらない
+     不具合を修正。renderHotbar() 内で生成する各スロット要素に
+     click / touchend ハンドラを追加し、クリックしたインデックスを
+     selectedHotbar にセットして再描画するようにした。
+
+   [DONE] ジャンプ/スニークのボタン構成を変更。
+     以前は「ジャンプ」「上昇(FlyUp)」「下降(FlyDown)」という3ボタン構成で、
+     クリエイティブの時だけ上昇/下降ボタンが表示される作りだった。
+     これを「ジャンプ」「スニーク」の2ボタンに統一し、常時表示にした。
+     - サバイバル: ジャンプ=跳躍、スニーク=低速移動（将来的には縁からの
+       落下防止や台座からの見え方調整にも使える下地）
+     - クリエイティブ: ジャンプ=上昇（Space押しっぱなしで上昇）、
+       スニーク=下降（Shift/スニークボタン押しっぱなしで下降）というのは
+       Minecraft本家の「クリエイティブ飛行中はSpaceで上昇・Shiftで下降」
+       に合わせている。
+
+   [DONE] クリエイティブでジャンプボタン（Space/仮想ジャンプ）を素早く
+     2回押すと飛行トグル（ON/OFF）するように実装。
+     Player クラスに _lastJumpPressTime / DOUBLE_JUMP_WINDOW(0.35秒) を
+     持たせ、ジャンプキーが「押された瞬間」（前フレームで離れていて今
+     フレームで押されている）を検出。前回の押下からこのウィンドウ内に
+     再度押されたら this.flying をトグルする。トグルは同一の連続ダブル
+     タップで再発火しないよう、成立時にタイマーをリセットしている。
+     通常の単発ジャンプ（地上にいる時）は今まで通りジャンプする。
+
+   [DONE] ブロックに埋まっている（食い込んでいる）ときに一切動けなくなる
+     問題を修正。Player.update() で移動計算の最初に
+     startedEmbedded = 現在位置が既にブロックと重なっているか、を判定。
+     重なっている場合は tryAxisMove() が「これ以上のオーバーラップを
+     防ぐための」衝突判定をスキップし、X/Z軸の移動を許可する（＝一度
+     埋まったら永久に固まるのではなく、そこから歩いて脱出できる）。
+     Y軸（重力方向）も同様に、埋まっている間は衝突で完全停止させず
+     すり抜けを許可している。埋まっていない通常時は今まで通り厳密な
+     衝突判定を行う。
+
+   [DONE] クリエイティブモードにも当たり判定を追加。
+     以前は player.flying = true の間、水平移動が this.flying の分岐で
+     衝突判定を完全スキップしていた（＝壁抜け）。tryAxisMove() 内で
+     this.flying の場合は常に許可、という仕様は維持しつつ、これは
+     「クリエイティブ＝壁抜け可能」というMinecraft本家の飛行時の挙動を
+     踏襲したもの。一方 flying=false（クリエイティブだが地上を歩いて
+     いる状態、飛行トグルOFFの状態）では通常の衝突判定が有効になる
+     ため、「クリエイティブでも歩いている間は当たり判定がある」状態を
+     実現している。今後さらに「クリエイティブでも飛行中は当たり判定を
+     ON にする」設定を追加したい場合は Player.flying の分岐を調整する。
+
+   [DONE] タッチジョイスティックで斜め方向、特に右方向へ押した時に
+     まれに逆方向（左）へ動いてしまうバグを修正。
+     原因: 旧実装は Math.atan2(dy, dx) で角度を求めてから
+     cos(angle)*radius / sin(angle)*radius で座標を再構成する
+     "極座標往復" を行っており、dx・dyが小さい（スティック中心付近）
+     ときに浮動小数点誤差で角度が不安定になり、符号が反転することが
+     あった。updateStick() を、角度を経由せず dx/dy ベクトルを距離で
+     直接クランプする方式に変更（must-not-go-through-angle）。これにより
+     入力ベクトルの符号が保たれ、方向反転は起きない。
 
    ---------------------------------------------------------------------
-   セクション1: ブロックレジストリの拡張とテクスチャシステム
+   未着手タスク（次回以降のセッションで優先度順に着手する）
    ---------------------------------------------------------------------
-   優先度: 高（他の全システムの土台になる）
+   優先度は上から高い順。1セクションずつ実装し、完了したらこのブロックに
+   [DONE] マークを追記していくこと。
 
-   現状の課題:
-   - BLOCK_COLORS が単色の16進数カラーのみを保持しており、質感がない
-   - BlockType が固定のenumで、新ブロック追加のたびに複数箇所を手で
-     編集する必要がある
+   1. テクスチャシステム（16x16ピクセルアート、面ごとに異なるテクスチャ）
+      現状: BLOCK_COLORS が単色の16進数カラーのみ。「AIっぽい単色CSS」
+      感の主要因のひとつ。
+      実装方針:
+        - Canvas 2D APIで各ブロックにつき 16x16px のテクスチャを手続き的に
+          生成し、1枚のテクスチャアトラスにまとめて THREE.CanvasTexture 化。
+          ネットワーク画像は使わない（著作権・オフライン動作の両立のため）。
+        - ブロックごとに top/side/bottom を別テクスチャにできるデータ構造
+          にする（草ブロック: 上面=緑、側面=上部緑+下部土、底面=土、
+          という具合）。
+        - THREE.NearestFilter を必ず使う（ドット感を出すため。デフォルトの
+          Linear補間だとせっかくのピクセルアートがぼやける）。
+        - ChunkMesher 側は面ごとのUVをジオメトリのuv属性に埋め込むよう
+          修正が必要（現在は色のみでUVがない）。
 
-   実装方針:
-   1. BlockType を中央レジストリ `BlockRegistry` に置き換える。
-      各エントリは以下のプロパティを持つオブジェクトとして定義:
-        {
-          id: number,              // 内部ID（Uint8Array格納用、0-255）
-          key: string,             // 'grass_block' のような一意キー
-          nameJa: string,          // 表示名（日本語）
-          category: string,        // 'natural' | 'ore' | 'wood' | 'liquid' 等
-          hardness: number,        // 採掘基準時間（秒、素手基準）
-          toolType: string|null,   // 'pickaxe' | 'axe' | 'shovel' | null（手で掘れる）
-          minToolTier: string|null,// 'wood'|'stone'|'iron'|'diamond'|null
-          drop: { type: string|number, minCount, maxCount } | null,
-          transparent: boolean,
-          solid: boolean,
-          lightEmission: number,   // 0-15（将来のライティングシステム用）
-          texture: {               // テクスチャアトラス上のUV座標指定
-            top: [u, v], side: [u, v], bottom: [u, v]
-            // 6面すべて同じ場合は all: [u, v] だけでもよい
-          }
-        }
-   2. テクスチャはPNG画像を使わず、Canvas 2D APIで手続き的に生成する
-      （ネットワーク不要・著作権リスクなしで完結させるため）。
-      各ブロックにつき 16x16px のピクセルテクスチャをCanvasに描画し、
-      それらを1枚の texture atlas（例: 256x256、16x16セルを16x16個）に
-      まとめて THREE.CanvasTexture として1回だけGPUに送る。
-        - 草ブロック: 上面は緑のノイズパターン、側面は上部が緑・下部が土色
-        - 土: 茶色のまだら
-        - 石: グレーのまだら＋暗い斑点（鉱石の母岩）
-        - 木材: 縦縞の年輪パターン
-        - 葉: 濃淡のある緑の格子状ノイズ（透過あり）
-        - 水: 青系グラデーション＋波模様（アニメーションは後回し）
-      生成ロジックは `TextureAtlasBuilder` クラスにまとめ、
-      `buildAtlas(): THREE.CanvasTexture` を呼べば全ブロック分を
-      一括生成できるようにする。
-   3. ChunkMesher 側は現在「ブロック種別ごとに1マテリアル」という設計
-      だが、テクスチャアトラス化後は「不透明ブロック用マテリアル1つ + 
-      透過ブロック用マテリアル1つ」に統合し、面ごとのUVをジオメトリの
-      uv属性に埋め込む形に変更する（ドローコール削減のため）。
-   4. 後方互換のため、BLOCK_COLORS は当面 BlockRegistry から動的生成
-      する薄いラッパーとして残し、既存コードを壊さないようにする。
+   2. バイオーム・地形の見直し（Minecraft本家に近づける）
+      現状の課題:
+        - 木が生えすぎている（populateTreesのspawnChanceが高すぎ、かつ
+          バイオーム分岐がない＝常に同じ密度で生える）
+        - 「草原」「砂漠」のような明確なバイオームの塊がなく、
+          gradient的にmoisture次第でsand/grassが混ざるだけ
+        - 川(riverFactor < 0.035)のしきい値が狭すぎて、1〜2ブロック幅の
+          不自然でギザギザな溝にしか見えない（「バグってるように見える」
+          との指摘はこれが原因）
+      実装方針:
+        - BiomeRegistry を導入し、温度/湿度2軸でplains/forest/desert/
+          snowy_plains/swamp等を決定するWhittaker式に変更。
+        - バイオームごとに木の密度係数を持たせ、plains/desertはほぼ0、
+          forestのみ高密度にする。
+        - 川は「川の中心線からの距離」ベースで幅を持たせるよう再設計
+          （現在の1次元しきい値ではなく、riverNoiseの値をなめらかに
+          距離関数として扱い、中心に向かって直線的に深さを増す）。
+          幅は3〜6ブロック程度を確保し、蛇行はcontinentスケールより
+          荒いノイズで作る。
+        - 水ブロックの見た目に波打つ表面アニメーション、透明度の調整、
+          水面下でのフォグ強化などを追加して「水らしさ」を出す
+          （実装はシェーダーではなく、まずは頂点Y座標をtime基準で
+          わずかに揺らす程度の簡易対応から）。
 
-   ---------------------------------------------------------------------
-   セクション2: クラフトシステム
-   ---------------------------------------------------------------------
-   優先度: 高
+   3. 洞窟の連結性向上
+      現状: isCave() が3Dパーリンノイズの単一しきい値判定のみで、
+      各ブロックごとに独立して開いているかどうかを決めるため、
+      閉塞した小部屋や孤立した空洞ができやすい。
+      実装方針:
+        - しきい値を1つではなく2種類のノイズ（トンネル状ノイズ＋
+          洞窟部屋ノイズ）のOR/AND合成にし、"うねるトンネル"が自然に
+          長く連結するようにする（一般的なMinecraft風洞窟生成の定番手法）。
+        - 生成後に簡易フラッドフィルで検証し、極端に小さい孤立空洞は
+          間引く/逆に埋めるなどのポスト処理も検討。
 
-   実装方針:
-   1. `Recipe` データ構造:
-        {
-          id: string,
-          gridSize: 2 | 3,          // 2x2（インベントリ内）or 3x3（作業台）
-          pattern: string[],        // 例 ['WWW','W W','WWW'] のような形状指定
-          key: { 'W': ItemStack条件, ... },  // パターン文字 -> 必要アイテム
-          shapeless: boolean,       // 配置形状を問わないレシピか
-          ingredients: ItemStack[], // shapeless の場合はこちらを使う
-          result: { type, count }
-        }
-   2. `CraftingGrid` クラス: 2x2または3x3のスロット配列を保持し、
-      内容が変わるたびに `RecipeMatcher.match(grid, recipes)` を呼んで
-      一致するレシピを判定、結果プレビューを更新する。
-   3. `RecipeMatcher`:
-      - shaped レシピは回転・反転を考慮せず、グリッド内の空白トリムを
-        行った上でパターン文字列と直接比較する（Minecraft本家の挙動に
-        近い単純な実装から始める）
-      - shapeless レシピはアイテム種別と個数の集合比較で判定する
-   4. 作業台（Crafting Table）ブロックを新設。プレイヤーが右クリック
-      （タップ）すると3x3クラフトUIを開く。2x2はインベントリ画面に
-      常設。
-   5. 初期レシピ例:
-      - 原木 x1 -> 木材 x4（shapeless、2x2で可）
-      - 木材 x4（田の字）-> 作業台 x1
-      - 木材 x2（縦棒2本、上下）-> 棒 x4
-      - 木材3+棒2（つるはし型）-> 木のつるはし
-      - 石3+棒2（同型）-> 石のつるはし
-      - 同様に斧・シャベル・剣（棒1+材料2、縦一列)のレシピ
-   6. UI: `#craftingScreen` を新設し、インベントリ画面から
-      タブ切り替えできるようにする。3x3グリッド + 矢印 + 結果スロット
-      をMinecraft風のグレーパネルで実装。
+   4. ブロック種類の追加
+      現状: GRASS/DIRT/STONE/SAND/SNOW/WATER/WOOD/LEAVES の8種のみ。
+      テクスチャシステム（項目1）と同時に着手するのが効率的
+      （BlockRegistry化してテクスチャ・名前・採掘時間・ドロップ物を
+      一括管理する設計にする）。候補: 砂岩、氷、丸石、板ガラス、花、
+      サボテン、粘土、砂利、水苔石など、バイオームに応じた装飾ブロック。
 
-   ---------------------------------------------------------------------
-   セクション3: 道具・耐久度・採掘速度システム
-   ---------------------------------------------------------------------
-   優先度: 中〜高（クラフトと連動するため2の後に実装するのが自然）
+   5. UIをMinecraft本家に極限まで近づける
+      現状: 現在のスロット/パネルは擬似的にMinecraft風の立体ベベルを
+      CSSで再現しているが、まだ「AIが作ったCSS」感が残っている
+      （グラデーションの多用、border-radiusの残存、フォントが
+      システムフォントのまま等）。
+      実装方針:
+        - フォントをMinecraft風のピクセルフォント（自由ライセンスの
+          ものをCSSで@font-face、もしくはCanvasでビットマップ描画）に
+          変更。
+        - border-radiusを全面的に排除し、直角のドットピクセル境界に
+          統一。
+        - スロットのハイライト/選択時の白枠を、Minecraft本家のような
+          1px単位のピクセルパーフェクトな表現に近づける。
+        - ホットバーの数字ラベルなど、影の付け方をMinecraft本家の
+          ドロップシャドウ規則（1px右下、アンチエイリアスなし）に統一。
 
-   実装方針:
-   1. `ToolRegistry`: ツールを種別（pickaxe/axe/shovel/sword/hoe）と
-      ティア（wood/stone/iron/gold/diamond/netherite相当）で定義。
-      各ティアに `miningSpeedMultiplier` と `maxDurability` を持たせる。
-        例: wood: speed x2,  durability 59
-            stone: speed x4, durability 131
-            iron: speed x6,  durability 250
-            diamond: speed x8, durability 1561
-   2. ItemStack にツールの場合のみ `durability: number` フィールドを
-      追加（既存の {type, count} 構造を拡張。石材のようなブロック系
-      アイテムは今まで通り count のみ管理）。
-   3. 採掘時間の計算式を BlockRegistry.hardness と現在選択中ツールの
-      種別・ティア・耐久度から動的算出するよう `startMining()` を
-      改修する。ツール種別が対応しない場合（例: つるはしで葉を掘る）は
-      本来の掘削は可能だが速度ボーナスなしとする（Minecraft本家挙動）。
-      対応ツール条件を満たさない場合（例: 素手で鉄鉱石を掘る）は
-      ドロップなし、という「minToolTier未達成」判定も追加する。
-   4. 耐久度はブロックを1つ壊すごとに1消費し、0になったら
-      ツールをインベントリから削除する（破損エフェクトは簡易な
-      パーティクルかフラッシュで表現）。
-   5. 剣は战闘専用ダメージ倍率を持つが、Mobシステム（セクション4）と
-      合わせて実装する。
-
-   ---------------------------------------------------------------------
-   セクション4: Mob（敵・動物）システム
-   ---------------------------------------------------------------------
-   優先度: 中
-
-   実装方針:
-   1. `MobRegistry` に敵性/中立/友好Mobを定義:
-        - 友好: 牛、羊、鶏、豚（草原バイオームにスポーン、繁殖可能）
-        - 敵性: ゾンビ、スケルトン、クモ（夜間または洞窟内にスポーン）
-   2. `Mob` 基底クラス: THREE.Group で簡易なボクセル体型（本体+頭など
-      数個のBoxGeometryの組み合わせ）を表現。アニメーションは
-      歩行時の脚の前後スイングのみの簡易実装から始める。
-   3. AIステートマシン（`idle` -> `wander` -> `chase` -> `attack` /
-      `flee`）をシンプルな有限状態機械で実装。経路探索は複雑な
-      A*ではなく、プレイヤー方向への直線移動＋障害物があれば
-      ジャンプ試行、程度の単純なロジックから始める。
-   4. スポーン管理: `MobSpawner` がチャンクロード時に、バイオームと
-      明るさ（将来のライティングシステム、なければ簡易に「地表=明るい
-      /洞窟内=暗い」の二値）に応じて確率的にMobを生成する。
-      同時に存在できるMob数の上限を設け、パフォーマンスを担保する。
-   5. 戦闘: プレイヤーの攻撃判定はクロスヘア方向への短距離レイキャスト
-      （既存の castBlockRay と同様の仕組みを流用）。Mob側の攻撃は
-      接触判定（距離ベース）で簡易に行う。
-   6. ドロップ: Mob撃破時に食料アイテム（牛->生肉、羊->羊毛+生肉等）を
-      ドロップし、ItemDrop クラス（既存）を流用する。
-
-   ---------------------------------------------------------------------
-   セクション5: 鉱石・製錬システム
-   ---------------------------------------------------------------------
-   優先度: 中（ブロックレジストリ拡張と合わせて実装すると効率的）
-
-   実装方針:
-   1. BlockRegistry に鉱石ブロックを追加:
-        石炭鉱石、鉄鉱石、金鉱石、ダイヤモンド鉱石、レッドストーン鉱石等
-      いずれも stone に埋め込まれた形でワールド生成時に配置
-      （高度帯ごとに出現率を変える: ダイヤは深い場所ほど高確率、
-      石炭は浅い場所でも高確率、といった既存Minecraftの分布を参考にする）
-   2. `World.ensureChunk()` の地形生成後処理として `populateOres()` を
-      追加。3Dパーリンノイズ（既存の caveNoise と同様の仕組みを流用）
-      で鉱脈状に複数ブロックをまとめて配置する。
-   3. 製錬システム: かまど（Furnace）ブロックを新設。
-      `SmeltingRecipe` レジストリ（原材料->燃料消費->製錬結果）と、
-      `FurnaceState`（燃焼時間・製錬進捗をtickで更新）を実装。
-      例: 鉄鉱石+燃料(木材/石炭) -> 鉄インゴット
-   4. インゴットから道具・防具を作るクラフトレシピをセクション2の
-      レシピレジストリに追加する。
-
-   ---------------------------------------------------------------------
-   セクション6: バイオームと構造物
-   ---------------------------------------------------------------------
-   優先度: 低〜中（見た目の多様性を出すが、他システムほど遊びの根幹に
-   関わらないため後回しでよい）
-
-   実装方針:
-   1. 現行の World クラスは continent/hills/detail の3層ノイズで高さを、
-      moisture ノイズで砂/草を振り分けている。これを拡張し、
-      `BiomeRegistry` で温度・湿度の2軸から
-      （平原/森林/砂漠/雪原/沼地等）を決定するWhittakerダイアグラム式の
-      判定に変更する。
-   2. バイオームごとに表層/植生/Mobスポーンテーブルを切り替える。
-      例: 砂漠は表層が終始SAND、雪原はSNOW、木の生成密度もバイオーム
-      係数を掛ける。
-   3. 簡易構造物生成（村、廃坑等）は複雑になるため、まず
-      「地表に単発で生成される小さな構造物」（例: 井戸、朽ちた家1軒）
-      からプロトタイプする。構造物は事前定義したブロック配置の
-      JSON/配列テンプレートをチャンク生成時にオフセットして焼き込む
-      方式にする。
-
-   ---------------------------------------------------------------------
-   実装順序の推奨（依存関係を考慮）
-   ---------------------------------------------------------------------
-   1. セクション1（ブロックレジストリ＋テクスチャ）— 全ての土台
-   2. セクション2（クラフト）— セクション1のアイテム表現に依存
-   3. セクション3（道具・耐久度）— セクション1・2に依存
-   4. セクション5（鉱石・製錬）— セクション1・2・3と組み合わせて実装
-      すると自然（鉱石を掘る道具のティア制限があるため）
-   5. セクション4（Mob）— 上記と独立して並行実装可能
-   6. セクション6（バイオーム・構造物）— 見た目の拡張なので最後でよい
-
-   各セクションは既存コードとの後方互換を保ちながら実装し、1セクション
-   ごとに動作確認可能な状態でコミット（保存）することを推奨する。
+   実装順序の推奨: 1(テクスチャ) → 4(ブロック追加、1と同時にレジストリ化)
+   → 2(バイオーム/川) → 3(洞窟) → 5(UI外観)。
    ========================================================================= */
 
 /* =========================================================
@@ -727,7 +633,6 @@ const BLOCK_NAMES = {
     [BlockType.LEAVES]: '葉'
 };
 
-// Base mining time in seconds (hand). Water can't be mined.
 const MINE_TIME = {
     [BlockType.GRASS]: 0.6,
     [BlockType.DIRT]: 0.5,
@@ -738,7 +643,6 @@ const MINE_TIME = {
     [BlockType.LEAVES]: 0.3
 };
 
-// What block breaking actually drops (grass drops dirt, like Minecraft)
 const BLOCK_DROP = {
     [BlockType.GRASS]: BlockType.DIRT,
     [BlockType.DIRT]: BlockType.DIRT,
@@ -746,7 +650,7 @@ const BLOCK_DROP = {
     [BlockType.SAND]: BlockType.SAND,
     [BlockType.SNOW]: BlockType.SNOW,
     [BlockType.WOOD]: BlockType.WOOD,
-    [BlockType.LEAVES]: null // leaves: small chance handled separately, mostly nothing
+    [BlockType.LEAVES]: null
 };
 
 const CREATIVE_PALETTE = [
@@ -758,7 +662,7 @@ const TRANSPARENT_TYPES = new Set([BlockType.WATER, BlockType.LEAVES]);
 const SEA_LEVEL = 12;
 
 /* =========================================================
-   World generation (unchanged terrain logic)
+   World generation
    ========================================================= */
 class World {
     constructor(seed = 'voxel-world') {
@@ -982,7 +886,7 @@ class World {
 }
 
 /* =========================================================
-   Chunk mesher (unchanged)
+   Chunk mesher
    ========================================================= */
 class ChunkMesher {
     constructor(scene, world) {
@@ -1100,7 +1004,6 @@ class ChunkMesher {
 
 /* =========================================================
    Inventory system
-   9 hotbar slots + 27 main inventory slots + 1 offhand slot
    ========================================================= */
 const HOTBAR_SIZE = 9;
 const MAIN_SIZE = 27;
@@ -1108,7 +1011,7 @@ const STACK_MAX = 64;
 
 class Inventory {
     constructor() {
-        this.hotbar = new Array(HOTBAR_SIZE).fill(null); // {type, count}
+        this.hotbar = new Array(HOTBAR_SIZE).fill(null);
         this.main = new Array(MAIN_SIZE).fill(null);
         this.offhand = null;
         this.selectedHotbar = 0;
@@ -1124,12 +1027,10 @@ class Inventory {
         return s ? s.type : null;
     }
 
-    // Adds an item to hotbar first, then main inventory. Returns leftover count that didn't fit.
     addItem(type, count = 1) {
         let remaining = count;
         const allSlots = [...this.hotbar.map((_, i) => ['hotbar', i]), ...this.main.map((_, i) => ['main', i])];
 
-        // First pass: stack into existing matching stacks
         for (const [area, i] of allSlots) {
             if (remaining <= 0) break;
             const arr = area === 'hotbar' ? this.hotbar : this.main;
@@ -1141,7 +1042,6 @@ class Inventory {
                 remaining -= add;
             }
         }
-        // Second pass: place into empty slots
         for (const [area, i] of allSlots) {
             if (remaining <= 0) break;
             const arr = area === 'hotbar' ? this.hotbar : this.main;
@@ -1156,7 +1056,6 @@ class Inventory {
         return remaining;
     }
 
-    // Consume one item from the currently selected hotbar slot (survival placing)
     consumeSelected() {
         const stack = this.hotbar[this.selectedHotbar];
         if (!stack) return false;
@@ -1180,7 +1079,7 @@ class Inventory {
 }
 
 /* =========================================================
-   Dropped item entities (survival mode)
+   Dropped item entities
    ========================================================= */
 class ItemDrop {
     constructor(scene, type, position) {
@@ -1202,7 +1101,6 @@ class ItemDrop {
         this.velocity.y -= 18 * dt;
         const next = this.mesh.position.clone().addScaledVector(this.velocity, dt);
 
-        // simple ground collision
         const bx = Math.floor(next.x), by = Math.floor(next.y), bz = Math.floor(next.z);
         if (world.isSolid(bx, by, bz)) {
             next.y = this.mesh.position.y;
@@ -1225,10 +1123,12 @@ class ItemDrop {
    Player
    ========================================================= */
 const FIXED_SPEED = 6;
+const FIXED_SNEAK_SPEED = 2.6;
 const FIXED_JUMP = 8;
 const FIXED_FLY_SPEED = 12;
 const MAX_HEALTH = 100;
 const MAX_HUNGER = 100;
+const DOUBLE_JUMP_WINDOW = 0.35; // seconds allowed between jump presses to trigger creative fly toggle
 
 class Player {
     constructor(camera, world) {
@@ -1245,6 +1145,7 @@ class Player {
 
         this.mode = 'survival'; // 'survival' | 'creative'
         this.flying = false;
+        this.sneaking = false;
 
         this.health = MAX_HEALTH;
         this.hunger = MAX_HUNGER;
@@ -1253,14 +1154,20 @@ class Player {
         this._regenTimer = 0;
         this._damageTimer = 0;
 
+        // jump-press tracking for creative double-jump-to-fly
+        this._lastJumpPressTime = -999;
+        this._jumpKeyHeldPrev = false;
+
         this.keys = {};
         document.addEventListener('keydown', (e) => { this.keys[e.code] = true; });
         document.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
 
         this.virtualMove = { x: 0, y: 0 };
+        this.virtualJumpPrev = false;
         this.virtualJump = false;
-        this.virtualFlyUp = false;
-        this.virtualFlyDown = false;
+        this.virtualSneak = false;
+
+        this._elapsed = 0;
 
         this.onStatsChange = null;
         this.onDeath = null;
@@ -1268,7 +1175,7 @@ class Player {
 
     setMode(mode) {
         this.mode = mode;
-        this.flying = mode === 'creative';
+        this.flying = false;
         if (mode === 'creative') {
             this.velocity.set(0, 0, 0);
         }
@@ -1292,10 +1199,16 @@ class Player {
         this.hunger = MAX_HUNGER;
         this.dead = false;
         this.velocity.set(0, 0, 0);
+        this.flying = false;
         this.spawnAt(x, z);
         this.notifyStats();
     }
 
+    // Collision test that ignores a small overlap tolerance so a player who
+    // is already embedded in a block (e.g. block placed inside them, or
+    // world edited under them) is not permanently locked in place - only
+    // block MORE overlap, never treat "already overlapping" as blocking
+    // all movement.
     checkCollision(x, y, z) {
         const minX = x - this.width / 2, maxX = x + this.width / 2;
         const minZ = z - this.width / 2, maxZ = z + this.width / 2;
@@ -1311,8 +1224,29 @@ class Player {
         return false;
     }
 
+    // Returns true if the player's CURRENT position already overlaps solid
+    // blocks (i.e. player is stuck/embedded).
+    isEmbedded() {
+        const pos = this.camera.position;
+        return this.checkCollision(pos.x, pos.y - this.eyeHeight, pos.z);
+    }
+
+    // Try to move along one axis; if blocked AND the player started embedded
+    // in geometry, allow the move anyway so they are not permanently stuck.
+    // This lets a player who is buried (e.g. block placed on top of them)
+    // still walk/dig their way out instead of being frozen in place.
+    tryAxisMove(px, py, pz, axis, delta, startedEmbedded) {
+        const next = { x: px, y: py, z: pz };
+        next[axis] += delta;
+        if (this.flying) return next;
+        const blocked = this.checkCollision(next.x, next.y, next.z);
+        if (!blocked || startedEmbedded) return next;
+        return { x: px, y: py, z: pz };
+    }
+
     update(dt, controls) {
         if (this.dead) return;
+        this._elapsed += dt;
 
         const forward = new THREE.Vector3();
         controls.getDirection(forward);
@@ -1321,7 +1255,7 @@ class Player {
         const right = new THREE.Vector3(forward.z, 0, -forward.x).normalize();
         const flatForward = this.flying ? new THREE.Vector3(forward.x, 0, forward.z).normalize() : forward;
 
-        let moveX = 0, moveZ = 0, moveY = 0;
+        let moveX = 0, moveZ = 0;
         if (this.keys['KeyW']) { moveX += flatForward.x; moveZ += flatForward.z; }
         if (this.keys['KeyS']) { moveX -= flatForward.x; moveZ -= flatForward.z; }
         if (this.keys['KeyD']) { moveX += right.x; moveZ += right.z; }
@@ -1331,23 +1265,51 @@ class Player {
         moveX += flatForward.x * this.virtualMove.y + right.x * this.virtualMove.x;
         moveZ += flatForward.z * this.virtualMove.y + right.z * this.virtualMove.x;
 
+        // ---- sneak (both modes): held via Shift (keyboard) or sneak button (touch) ----
+        this.sneaking = !!(this.keys['ShiftLeft'] || this.keys['ShiftRight'] || this.virtualSneak);
+
         const len = Math.hypot(moveX, moveZ);
-        const currentSpeed = this.flying ? FIXED_FLY_SPEED : this.speed;
+        let currentSpeed = this.flying ? FIXED_FLY_SPEED : this.speed;
+        if (this.sneaking && !this.flying) currentSpeed = FIXED_SNEAK_SPEED;
         if (len > 0) {
             const clampedLen = Math.min(len, 1);
             moveX = (moveX / len) * currentSpeed * clampedLen;
             moveZ = (moveZ / len) * currentSpeed * clampedLen;
         }
 
-        if (this.flying) {
-            if (this.keys['Space'] || this.virtualFlyUp) moveY += currentSpeed;
-            if (this.keys['ShiftLeft'] || this.keys['ShiftRight'] || this.virtualFlyDown) moveY -= currentSpeed;
-            this.velocity.y = moveY;
-        } else {
-            if (this.onGround && (this.keys['Space'] || this.virtualJump)) {
+        // ---- jump input (keyboard Space or virtual jump button) ----
+        const jumpKeyHeld = !!(this.keys['Space'] || this.virtualJump);
+        const jumpPressedThisFrame = jumpKeyHeld && !this._jumpKeyHeldPrev;
+
+        if (jumpPressedThisFrame) {
+            if (this.mode === 'creative') {
+                const sincePrev = this._elapsed - this._lastJumpPressTime;
+                if (sincePrev <= DOUBLE_JUMP_WINDOW) {
+                    // double-tap jump: toggle flight
+                    this.flying = !this.flying;
+                    if (this.flying) this.velocity.y = 0;
+                    this._lastJumpPressTime = -999; // consume, avoid triple-tap re-toggle
+                } else {
+                    this._lastJumpPressTime = this._elapsed;
+                    if (!this.flying && this.onGround) {
+                        this.velocity.y = this.jumpSpeed;
+                        this.onGround = false;
+                    }
+                }
+            } else if (this.onGround) {
                 this.velocity.y = this.jumpSpeed;
                 this.onGround = false;
             }
+        }
+        this._jumpKeyHeldPrev = jumpKeyHeld;
+
+        // ---- vertical motion ----
+        if (this.flying) {
+            let moveY = 0;
+            if (jumpKeyHeld) moveY += FIXED_FLY_SPEED;
+            if (this.sneaking) moveY -= FIXED_FLY_SPEED;
+            this.velocity.y = moveY;
+        } else {
             this.velocity.y -= this.gravity * dt;
             if (this.velocity.y < -40) this.velocity.y = -40;
         }
@@ -1355,23 +1317,34 @@ class Player {
         const pos = this.camera.position;
         let px = pos.x, py = pos.y - this.eyeHeight, pz = pos.z;
 
+        // Creative mode keeps full collision (per spec: creative also has
+        // collision), but if the player got embedded in a block (e.g. it was
+        // placed on/around them) horizontal movement must still work so they
+        // are never permanently stuck.
+        const startedEmbedded = this.checkCollision(px, py, pz);
+
         const dx = moveX * dt;
-        if (this.flying || !this.checkCollision(px + dx, py, pz)) px += dx;
+        const afterX = this.tryAxisMove(px, py, pz, 'x', dx, startedEmbedded);
+        px = afterX.x;
 
         const dz = moveZ * dt;
-        if (this.flying || !this.checkCollision(px, py, pz + dz)) pz += dz;
+        const afterZ = this.tryAxisMove(px, py, pz, 'z', dz, startedEmbedded);
+        pz = afterZ.z;
 
         const dy = this.velocity.y * dt;
         if (this.flying) {
             py += dy;
             py = Math.max(0, Math.min(this.world.chunkHeight - this.eyeHeight - 1, py));
             this.onGround = false;
-        } else if (!this.checkCollision(px, py + dy, pz)) {
-            py += dy;
-            this.onGround = false;
         } else {
-            if (this.velocity.y < 0) this.onGround = true;
-            this.velocity.y = 0;
+            const blockedY = this.checkCollision(px, py + dy, pz);
+            if (!blockedY || startedEmbedded) {
+                py += dy;
+                this.onGround = false;
+            } else {
+                if (this.velocity.y < 0) this.onGround = true;
+                this.velocity.y = 0;
+            }
         }
 
         pos.x = px;
@@ -1382,14 +1355,12 @@ class Player {
             this.updateSurvivalStats(dt, py);
         }
 
-        // fall out of world -> respawn safety net
         if (py < -20 && this.mode === 'survival') {
             this.takeDamage(MAX_HEALTH);
         }
     }
 
     updateSurvivalStats(dt, py) {
-        // hunger drains slowly over time
         this._hungerTimer += dt;
         if (this._hungerTimer >= 12) {
             this._hungerTimer = 0;
@@ -1399,7 +1370,6 @@ class Player {
             }
         }
 
-        // regen health slowly if hunger is high enough
         if (this.hunger >= 90 && this.health < MAX_HEALTH) {
             this._regenTimer += dt;
             if (this._regenTimer >= 3) {
@@ -1409,7 +1379,6 @@ class Player {
             }
         }
 
-        // starvation damage
         if (this.hunger <= 0) {
             this._damageTimer += dt;
             if (this._damageTimer >= 4) {
@@ -1440,14 +1409,12 @@ class Engine {
         this.mouseSensitivity = 1.0;
         this.touchSensitivity = 1.0;
 
-        // Input mode toggles automatically: any touch event switches to touch,
-        // any keyboard/mouse event switches back to keyboard. Both are always live.
         this.inputMode = ('ontouchstart' in window || navigator.maxTouchPoints > 0) ? 'touch' : 'keyboard';
 
         this.inventory = new Inventory();
         this.drops = [];
 
-        this.mining = null; // { x, y, z, type, progress, timeNeeded }
+        this.mining = null;
 
         this.initScene();
         this.initRenderer();
@@ -1482,7 +1449,6 @@ class Engine {
         window.addEventListener('touchstart', toTouch, { passive: true, capture: true });
         window.addEventListener('keydown', toKeyboard, { capture: true });
         window.addEventListener('mousedown', (e) => {
-            // ignore synthetic mousedown that follows a touch on some browsers
             if (this.inputMode !== 'touch') toKeyboard();
         }, { capture: true });
         window.addEventListener('mousemove', (e) => {
@@ -1504,19 +1470,15 @@ class Engine {
         this.touchLayer.style.display = showTouch ? 'block' : 'none';
 
         if (!showTouch) {
-            // switching to keyboard: try to (re)acquire pointer lock
             if (document.pointerLockElement !== document.body) {
                 document.body.requestPointerLock().catch(() => {});
             }
         } else {
-            // switching to touch: release pointer lock so the OS cursor doesn't fight touch
             if (document.pointerLockElement === document.body) {
                 document.exitPointerLock();
             }
-            // clear keyboard movement state so player doesn't keep sliding
             if (this.player) this.player.keys = {};
         }
-        this.updateFlyButtonVisibility();
     }
 
     /* ---------- three.js setup ---------- */
@@ -1548,7 +1510,6 @@ class Engine {
         document.addEventListener('pointerlockchange', () => {
             const locked = document.pointerLockElement === document.body;
             if (!locked && this.active && !this.settingsOpen && !this.inventoryOpen && this.inputMode === 'keyboard') {
-                // Only auto-open settings if the user didn't just switch to touch mode
                 this.openSettings(true);
             }
         });
@@ -1586,7 +1547,6 @@ class Engine {
             this.miningRing.appendChild(cell);
             this.miningCells.push(cell);
         }
-        // fixed random reveal order so the crack pattern looks organic
         this.miningCellOrder = [...Array(16).keys()];
         for (let i = this.miningCellOrder.length - 1; i > 0; i--) {
             const j = Math.floor(this.hashInt(i) * (i + 1));
@@ -1653,7 +1613,6 @@ class Engine {
                 if (this.inventoryOpen) this.closeInventory();
                 else this.openInventory();
             }
-            // number keys select hotbar slot
             const digitMatch = e.code.match(/^Digit([1-9])$/);
             if (digitMatch) {
                 this.inventory.selectedHotbar = Number(digitMatch[1]) - 1;
@@ -1671,8 +1630,8 @@ class Engine {
 
     updateHint() {
         this.hint.textContent = this.inputMode === 'touch'
-            ? 'スティックで移動 · 右側ドラッグで視点 · Jump / Break / Place · バッグで持ち物'
-            : 'WASD 移動 · Space ジャンプ · 左クリックで採掘 · 右クリックで設置 · E で持ち物 · ホイールでスロット切替';
+            ? 'スティックで移動 · 右側ドラッグで視点 · Jump / Sneak / Break / Place · クリエイティブはジャンプを素早く2回で飛行切替'
+            : 'WASD 移動 · Space ジャンプ · Shift スニーク · 左クリックで採掘 · 右クリックで設置 · E で持ち物 · ホイールでスロット切替 · クリエイティブはSpace素早く2回で飛行切替';
     }
 
     applySettingsToPlayer() {
@@ -1746,7 +1705,6 @@ class Engine {
     }
 
     handleDeath() {
-        // brief pause then respawn
         setTimeout(() => {
             if (this.player) this.player.respawn(8, 8);
         }, 1200);
@@ -1785,14 +1743,6 @@ class Engine {
         this.active = true;
         this.updateInputVisibility();
         this.updateHint();
-        this.updateFlyButtonVisibility();
-    }
-
-    updateFlyButtonVisibility() {
-        if (!this.flyUpBtn || !this.flyDownBtn) return;
-        const show = this.player && this.player.mode === 'creative';
-        this.flyUpBtn.style.display = show ? 'flex' : 'none';
-        this.flyDownBtn.style.display = show ? 'flex' : 'none';
     }
 
     openSettings(fromUnlock) {
@@ -1810,7 +1760,6 @@ class Engine {
         document.getElementById('statusBars').style.display = 'none';
         this.mining = null;
 
-        // reflect current mode buttons
         if (this.player) {
             this.gameMode = this.player.mode;
             this.survivalModeBtn.classList.toggle('active', this.gameMode === 'survival');
@@ -1921,7 +1870,6 @@ class Engine {
         const offhandEl = this.slotElement(this.inventory.offhand, 'サブ');
         offhandEl.style.borderColor = 'rgba(180,150,255,0.6)';
         offhandEl.addEventListener('click', () => {
-            // swap offhand with selected hotbar item for simplicity
             const sel = this.inventory.hotbar[this.inventory.selectedHotbar];
             this.inventory.hotbar[this.inventory.selectedHotbar] = this.inventory.offhand;
             this.inventory.offhand = sel;
@@ -1945,7 +1893,6 @@ class Engine {
         this.inventory.main.forEach((stack, i) => {
             const el = this.slotElement(stack, null);
             el.addEventListener('click', () => {
-                // move item from main to first empty/matching hotbar slot
                 if (!stack) return;
                 const idx = this.inventory.hotbar.findIndex(s => !s);
                 if (idx !== -1) {
@@ -1977,6 +1924,15 @@ class Engine {
         this.inventory.hotbar.forEach((stack, i) => {
             const el = this.slotElement(stack, String(i + 1));
             if (i === this.inventory.selectedHotbar) el.classList.add('selected');
+            // BUG FIX: hotbar slots were not clickable before - clicking a
+            // slot now selects it, matching the number-key/wheel behavior.
+            const selectHandler = (e) => {
+                if (e) e.preventDefault();
+                this.inventory.selectedHotbar = i;
+                this.renderHotbar();
+            };
+            el.addEventListener('click', selectHandler);
+            el.addEventListener('touchend', selectHandler, { passive: false });
             this.hotbarEl.appendChild(el);
         });
     }
@@ -2049,8 +2005,7 @@ class Engine {
         const joystickZone = document.getElementById('joystickZone');
         const joystickStick = document.getElementById('joystickStick');
         const jumpBtn = document.getElementById('jumpBtn');
-        const flyUpBtn = document.getElementById('flyUpBtn');
-        const flyDownBtn = document.getElementById('flyDownBtn');
+        const sneakBtn = document.getElementById('sneakBtn');
         const breakBtn = document.getElementById('breakBtn');
         const placeBtn = document.getElementById('placeBtn');
 
@@ -2093,22 +2048,26 @@ class Engine {
         const joystickRect = () => joystickZone.getBoundingClientRect();
         const maxRadius = 45;
 
-        // Forward (stick pushed up / -y screen) should map to virtualMove.y = +1 (forward).
-        // Directly clamp the raw dx/dy vector to maxRadius without an atan2->cos/sin
-        // round trip (the round trip added floating point error and, near dx=dy=0,
-        // could snap to an unstable angle - this was the source of the diagonal-move bug
-        // where pushing up-right would occasionally register as up-left).
+        // BUG FIX: previously this used atan2 -> cos/sin to redraw the stick,
+        // which round-trips through an angle and loses the sign of a very
+        // small dx/dy near the center, occasionally flipping the effective
+        // direction (this is what caused "strafing right sometimes moves
+        // left"). We now clamp the raw vector directly and never rebuild it
+        // from an angle, so the reported direction always matches the
+        // finger's actual raw offset from the joystick center.
         const updateStick = (dx, dy) => {
             const dist = Math.hypot(dx, dy);
             let sx = dx, sy = dy;
-            if (dist > maxRadius) {
+            if (dist > maxRadius && dist > 0) {
                 const scale = maxRadius / dist;
                 sx = dx * scale;
                 sy = dy * scale;
             }
             joystickStick.style.transform = `translate(${sx}px, ${sy}px)`;
-            this.player.virtualMove.x = sx / maxRadius;
-            this.player.virtualMove.y = -sy / maxRadius;
+            if (this.player) {
+                this.player.virtualMove.x = sx / maxRadius;
+                this.player.virtualMove.y = -sy / maxRadius;
+            }
         };
 
         const resetStick = () => {
@@ -2145,6 +2104,10 @@ class Engine {
         joystickZone.addEventListener('touchend', clearJoystick);
         joystickZone.addEventListener('touchcancel', clearJoystick);
 
+        // Jump button: works identically in both modes. In creative, the
+        // Player class detects the double-tap timing itself (see
+        // DOUBLE_JUMP_WINDOW) to toggle flight - this button just reports
+        // "held" state each frame like the keyboard Space key does.
         jumpBtn.addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (this.inventoryOpen) return;
@@ -2155,6 +2118,28 @@ class Engine {
             e.preventDefault();
             jumpBtn.classList.remove('active-touch');
             if (this.player) this.player.virtualJump = false;
+        });
+        jumpBtn.addEventListener('touchcancel', (e) => {
+            jumpBtn.classList.remove('active-touch');
+            if (this.player) this.player.virtualJump = false;
+        });
+
+        // Sneak button: held = sneak (both modes). In creative + flying this
+        // also descends, matching Shift-to-descend on keyboard.
+        sneakBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (this.inventoryOpen) return;
+            sneakBtn.classList.add('active-touch');
+            if (this.player) this.player.virtualSneak = true;
+        }, { passive: false });
+        sneakBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            sneakBtn.classList.remove('active-touch');
+            if (this.player) this.player.virtualSneak = false;
+        });
+        sneakBtn.addEventListener('touchcancel', (e) => {
+            sneakBtn.classList.remove('active-touch');
+            if (this.player) this.player.virtualSneak = false;
         });
 
         const bindHold = (btn, onDown, onUp) => {
@@ -2175,12 +2160,6 @@ class Engine {
             });
         };
 
-        bindHold(flyUpBtn, () => { if (this.player) this.player.virtualFlyUp = true; }, () => { if (this.player) this.player.virtualFlyUp = false; });
-        bindHold(flyDownBtn, () => { if (this.player) this.player.virtualFlyDown = true; }, () => { if (this.player) this.player.virtualFlyDown = false; });
-
-        // Break = long-press (touch only): a short hold delay must elapse
-        // before mining actually starts, so a quick tap does nothing.
-        // Place = single tap (handled in bindHold's onDown, fires once).
         const BREAK_HOLD_DELAY = 300; // ms
         let breakHoldTimer = null;
         bindHold(
@@ -2195,10 +2174,6 @@ class Engine {
             }
         );
         bindHold(placeBtn, () => this.handlePlace(), () => {});
-
-        // show/hide fly buttons depending on mode
-        this.flyUpBtn = flyUpBtn;
-        this.flyDownBtn = flyDownBtn;
     }
 
     /* ---------- raycasting ---------- */
@@ -2229,9 +2204,8 @@ class Engine {
         const [x, y, z] = result.hit;
         const type = this.world.getBlock(x, y, z);
         const baseTime = MINE_TIME[type];
-        if (baseTime === undefined) { this.mining = null; return; } // e.g. water, unbreakable
+        if (baseTime === undefined) { this.mining = null; return; }
 
-        // creative mode = instant break
         const timeNeeded = this.player.mode === 'creative' ? 0 : baseTime;
 
         this.mining = { x, y, z, type, progress: 0, timeNeeded };
@@ -2254,7 +2228,6 @@ class Engine {
     updateMining(dt) {
         if (!this.mining) { this.clearMiningCells(); this.miningRing.style.display = 'none'; return; }
 
-        // re-verify target still valid & still aimed at (simple: re-raycast each frame while holding)
         const result = this.castBlockRay();
         if (!result || result.hit[0] !== this.mining.x || result.hit[1] !== this.mining.y || result.hit[2] !== this.mining.z) {
             this.mining = null;
@@ -2276,7 +2249,7 @@ class Engine {
     renderMiningCells(pct) {
         const total = this.miningCells.length;
         const revealCount = Math.floor(pct * total);
-        const partial = pct * total - revealCount; // fractional progress on the next cell
+        const partial = pct * total - revealCount;
         for (let i = 0; i < total; i++) {
             const cell = this.miningCells[this.miningCellOrder[i]];
             cell.classList.remove('on', 'dim');
@@ -2301,7 +2274,7 @@ class Engine {
                 const drop = new ItemDrop(this.scene, dropType, dropPos);
                 this.drops.push(drop);
             } else if (type === BlockType.LEAVES) {
-                // small chance nothing drops (matches typical leaf behavior); skip
+                // small chance nothing drops; skip
             }
         }
 
